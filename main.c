@@ -38,16 +38,16 @@ typedef struct shader_program
   GLuint id;
   GLuint pos_attrib_loc;
   GLuint col_attrib_loc;
-} shader_program_t;
+} device_program_t;
 
 typedef struct gpu_geo
 {
   GLuint vao;
   GLuint vbo;
-} gpu_geo_t;
+} device_buffer_t;
 
 void
-setup_shader_program( shader_program_t* prog )
+setup_shader_program( device_program_t* prog )
 {
   const char* vs_src = 
     SHDR_VERSION
@@ -132,7 +132,7 @@ setup_shader_program( shader_program_t* prog )
 }
 
 void
-setup_geometry_storage( gpu_geo_t* gpu_geo, const shader_program_t* prog )
+setup_geometry_storage( device_buffer_t* gpu_geo, const device_program_t* prog )
 {
   GLuint  stream_idx = 0;
   glCreateVertexArrays( 1, &gpu_geo->vao );
@@ -237,8 +237,8 @@ expand_lines( const vertex_t* line_buf, uint32_t line_buf_len,
 
 typedef struct line_draw_device
 {
-  shader_program_t program;
-  gpu_geo_t data;
+  device_program_t program;
+  device_buffer_t data;
 } line_draw_device_t;
 
 typedef struct line_draw_engine
@@ -299,12 +299,6 @@ main( int32_t argc, char* argv )
   glfwMakeContextCurrent( window );
   if( !gladLoadGLLoader( (GLADloadproc)glfwGetProcAddress ) ) { return EXIT_FAILURE; }
 
-  // shader_program_t program = {0};
-  // gpu_geo_t gpu_line = {0};
-  // gpu_geo_t gpu_quad = {0};
-  // setup_shader_program( &program );
-  // setup_geometry_storage( &gpu_line, &program );
-  // setup_geometry_storage( &gpu_quad, &program );
 
   uint32_t line_buf_cap = MAX_VERTS / 3;
   uint32_t line_buf_len;
@@ -317,7 +311,10 @@ main( int32_t argc, char* argv )
   line_engine.update = gl_lines_update;
   line_engine.render = gl_lines_render;
   
+  line_draw_device_t line
+  
   line_engine.setup( &line_device );
+
 
 
   // uint32_t quad_buf_cap = MAX_VERTS;
