@@ -33,14 +33,14 @@ typedef struct vertex
   msh_vec3_t col;
 } vertex_t;
 
-typedef struct shader_program
+typedef struct device_program
 {
   GLuint id;
   GLuint pos_attrib_loc;
   GLuint col_attrib_loc;
 } device_program_t;
 
-typedef struct gpu_geo
+typedef struct device_buffer
 {
   GLuint vao;
   GLuint vbo;
@@ -244,7 +244,7 @@ typedef struct line_draw_device
 typedef struct line_draw_engine
 {
   void (*setup)( line_draw_device_t* );
-  void (*update)( line_draw_device_t*, const void*, int32_t );
+  uint32_t (*update)( line_draw_device_t*, const void*, int32_t, int32_t );
   void (*render)( const line_draw_device_t*, const int32_t, const float* );
 } line_draw_engine_t;
 
@@ -255,10 +255,11 @@ gl_lines_setup( line_draw_device_t* device )
   setup_geometry_storage( &device->data, &device->program );
 }
 
-void
-gl_lines_update( line_draw_device_t* device, const void* data, int32_t data_size )
+uint32_t
+gl_lines_update( line_draw_device_t* device, const void* data, int32_t n_elems, int32_t elem_size )
 {
-  glNamedBufferSubData( device->data.vbo, 0, data_size, data );
+  glNamedBufferSubData( device->data.vbo, 0, n_elems*elem_size, data );
+  return n_elems;
 }
 
 void
@@ -269,6 +270,37 @@ gl_lines_render( const line_draw_device_t* device, const int32_t count, const fl
 
   glBindVertexArray( device->data.vao );
   glDrawArrays( GL_LINES, 0, count );
+
+  glBindVertexArray( 0 );
+  glUseProgram( 0 );
+}
+
+void
+cpu_lines_setup( line_draw_device_t* device )
+{
+  setup_shader_program( &device->program );
+  setup_geometry_storage( &device->data, &device->program );
+}
+
+uint32_t
+cpu_lines_update( line_draw_device_t* device, const void* data, int32_t n_elems, int32_t elem_size )
+{
+  static void* quad_buf = NULL;
+  if( !quad_buf ) { quad_buf = malloc( MAX_VERTS * sizeof(vertex_t) ); }
+  uint32_t quad_buf_len = 0;
+  expand_lines( data, n_elems, quad_buf, &quad_buf_len, MAX_VERTS, 0.025f );
+  glNamedBufferSubData( device->data.vbo, 0, quad_buf_len * elem_size, quad_buf );
+  return quad_buf_len;
+}
+
+void
+cpu_lines_render( const line_draw_device_t* device, const int32_t count, const float* mvp )
+{
+  glUseProgram( device->program.id );
+  glUniformMatrix4fv( 0, 1, GL_FALSE, mvp );
+
+  glBindVertexArray( device->data.vao );
+  glDrawArrays( GL_TRIANGLES, 0, count );
 
   glBindVertexArray( 0 );
   glUseProgram( 0 );
@@ -289,6 +321,7 @@ main( int32_t argc, char* argv )
   glfwWindowHint( GLFW_CONTEXT_VERSION_MAJOR, 4 );
   glfwWindowHint( GLFW_CONTEXT_VERSION_MINOR, 5 );
   glfwWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE );
+  glfwWindowHint( GLFW_DOUBLEBUFFER, GL_FALSE );
   GLFWwindow* window = glfwCreateWindow( window_width, window_height, "OGL Lines", NULL, NULL );
   if( !window )
   {
@@ -305,28 +338,21 @@ main( int32_t argc, char* argv )
   vertex_t* line_buf = malloc( line_buf_cap * sizeof(vertex_t) );
 
   // How to switch --> each setup is bit costly. Maybe just switch engines...? -> pipeline is engine and device.
-  line_draw_device_t line_device = {0};
-  line_draw_engine_t line_engine = {0};
-  line_engine.setup = gl_lines_setup;
-  line_engine.update = gl_lines_update;
-  line_engine.render = gl_lines_render;
-  
-  line_draw_device_t line
-  
-  line_engine.setup( &line_device );
+  line_draw_device_t gl_line_device = {0};
+  line_draw_engine_t gl_line_engine = {0};
+  gl_line_engine.setup  = cpu_lines_setup;
+  gl_line_engine.update = cpu_lines_update;
+  gl_line_engine.render = cpu_lines_render;
 
+  gl_line_engine.setup( &gl_line_device );
 
-
-  // uint32_t quad_buf_cap = MAX_VERTS;
-  // uint32_t quad_buf_len;
-  // vertex_t* quad_buf = malloc( quad_buf_cap * sizeof(vertex_t) );
 
   msh_camera_t cam = {0};
   msh_camera_init( &cam, &(msh_camera_desc_t){ .eye = msh_vec3( 0.0f, 0.0f, 5.0f),
                                                .center = msh_vec3_zeros(),
                                                .up = msh_vec3_posy(),
-                                               .viewport = msh_vec4(0.0, 0.0, window_width, window_height),
-                                               .fovy = msh_rad2deg(60),
+                                               .viewport = msh_vec4( 0.0f, 0.0f, window_width, window_height ),
+                                               .fovy = msh_rad2deg( 60 ),
                                                .znear = 0.01f,
                                                .zfar = 10.0f,
                                                .use_ortho = true } );
@@ -346,38 +372,24 @@ main( int32_t argc, char* argv )
     }
 
     t1 = msh_time_now();
-    
     line_buf_len = 0;
     generate_line_data( line_buf, &line_buf_len, line_buf_cap );
-    // expand_lines( line_buf, line_buf_len, quad_buf, &quad_buf_len, quad_buf_cap, 0.025f );
-
     t2 = msh_time_now();
     double diff1 = msh_time_diff_ms( t2, t1 );
 
-    t1 = msh_time_now();
 
     glClearColor( 0.12f, 0.12f, 0.12f, 1.0f );
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
     glViewport(0, 0, window_width, window_height);
 
-    // glNamedBufferSubData( gpu_line.vbo, 0, line_buf_len*sizeof(vertex_t), line_buf );
-    // glNamedBufferSubData( gpu_quad.vbo, 0, quad_buf_len*sizeof(vertex_t), quad_buf );
-    line_engine.update( &line_device, line_buf, line_buf_len*sizeof(vertex_t) );
+    t1 = msh_time_now();
 
-    // glUseProgram( program.id );
-    // glUniformMatrix4fv( 0, 1, GL_FALSE, &mvp.data[0] );
+    uint32_t elem_count = gl_line_engine.update( &gl_line_device, line_buf, line_buf_len, sizeof(vertex_t) );
 
-    // glBindVertexArray( gpu_quad.vao );
-    // glDrawArrays( GL_TRIANGLES, 0, quad_buf_len );
-    
-    // glBindVertexArray( gpu_line.vao );
-    // glDrawArrays( GL_LINES, 0, line_buf_len );
+    gl_line_engine.render( &gl_line_device, elem_count, &mvp.data[0] );
 
-    // glBindVertexArray( 0 );
-    // glUseProgram( 0 );
-    line_engine.render( &line_device, line_buf_len, &mvp.data[0] );
-
-    glfwSwapBuffers( window );
+    // glfwSwapBuffers( window );
+    glFlush();
     glfwPollEvents();
     
     t2 = msh_time_now();
