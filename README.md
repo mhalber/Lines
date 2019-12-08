@@ -2,4 +2,4 @@
 
 ## Lines
 
-This repository explores efficient ways of rendering wide lines using opengl
+This repository explores different ways of rendering wide lines using opengl
