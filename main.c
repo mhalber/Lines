@@ -38,10 +38,14 @@ typedef struct vertex
 
 #define GL_LINES_IMPLEMENTATION
 #define CPU_LINES_IMPLEMENTATION
-// #define GEOMETRY_SHADER_LINES_IMPLEMENTATION
+#define GEOMETRY_SHADER_LINES_IMPLEMENTATION
+#define TEX_BUFFER_LINES_IMPLEMENTATION
 #include "gl_lines.h"
 #include "cpu_lines.h"
-// #include "geometry_shader_lines.h"
+#include "geometry_shader_lines.h"
+#include "tex_buffer_lines.h"
+// #include "vp_shift_lines.h"
+// #include "instancing_lines.h"
 
 typedef struct line_draw_engine
 {
@@ -117,7 +121,7 @@ void generate_line_data( vertex_t* line_buf, uint32_t* line_buf_len, uint32_t li
 }
 
 int32_t
-main( int32_t argc, char* argv )
+main( int32_t argc, char** argv )
 {
   int32_t error = 0;
   error = !glfwInit();
@@ -146,10 +150,12 @@ main( int32_t argc, char* argv )
   uint32_t line_buf_len;
   vertex_t* line_buf = malloc( line_buf_cap * sizeof(vertex_t) );
 
-  uint32_t active_idx = 1;
-  line_draw_engine_t engines[3] = {0};
+  uint32_t active_idx = 3;
+  line_draw_engine_t engines[6] = {0};
   setup( engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render );
   setup( engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render );
+  setup( engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render );
+  setup( engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render );
 
   msh_camera_t cam = {0};
   msh_camera_init( &cam, &(msh_camera_desc_t){ .eye = msh_vec3( 0.0f, 0.0f, 5.0f),

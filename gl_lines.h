@@ -26,7 +26,7 @@ typedef struct gl_lines_device
 void
 gl_lines_assert_shader_compiled( GLuint shader_id )
 {
-  GLuint status;
+  GLint status;
   glGetShaderiv( shader_id, GL_COMPILE_STATUS, &status );
   if( status == GL_FALSE )
   {
@@ -43,7 +43,7 @@ gl_lines_assert_shader_compiled( GLuint shader_id )
 void
 gl_lines_assert_program_linked( GLuint program_id )
 {
-  GLuint status;
+  GLint status;
   glGetProgramiv( program_id, GL_LINK_STATUS, &status );
   if( status == GL_FALSE )
   {

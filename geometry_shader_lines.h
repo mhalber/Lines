@@ -9,18 +9,65 @@ Add explicit uniform location to the shader generation and store them in the dev
 Also explicit attrib location?
 */
 
-void geo_shdr_lines_setup( line_draw_device_t* device );
-uint32_t geo_shdr_lines_update( line_draw_device_t* device, const void* data, int32_t n_elems, int32_t elem_size );
-void geo_shdr_lines( line_draw_device_t* device, const int32_t count, const float* mvp );
+void* geom_shdr_lines_init_device( void );
+uint32_t geom_shdr_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size );
+void geom_shdr_lines( const void* device, const int32_t count, const float* mvp );
 
 #endif /* GEOMETRY_SHADER_LINES_H */
 
 
 #ifdef GEOMETRY_SHADER_LINES_IMPLEMENTATION
 
-void
-setup_shader_programa( device_program_t* prog )
+typedef struct geom_shader_lines_device
 {
+  GLuint program_id;
+  GLuint uniform_mvp_location;
+  GLuint attrib_pos_location;
+  GLuint attrib_col_location;
+  GLuint vao;
+  GLuint vbo;
+} geom_shader_lines_device_t;
+
+void
+geom_shader_lines_assert_shader_compiled( GLuint shader_id )
+{
+  GLint status;
+  glGetShaderiv( shader_id, GL_COMPILE_STATUS, &status );
+  if( status == GL_FALSE )
+  {
+    int32_t info_len = 0;
+    glGetShaderiv( shader_id, GL_INFO_LOG_LENGTH, &info_len );
+    GLchar* info = malloc( info_len );
+    glGetShaderInfoLog( shader_id, info_len, &info_len, info );
+    fprintf( stderr, "[GL] Compile error: \n%s\n", info );
+    free( info );
+    exit( -1 );
+  }
+}
+
+void
+geom_shader_lines_assert_program_linked( GLuint program_id )
+{
+  GLint status;
+  glGetProgramiv( program_id, GL_LINK_STATUS, &status );
+  if( status == GL_FALSE )
+  {
+    int32_t info_len = 0;
+    glGetProgramiv( program_id, GL_INFO_LOG_LENGTH, &info_len );
+    GLchar* info = malloc( info_len );
+    glGetProgramInfoLog( program_id, info_len, &info_len, info );
+    fprintf( stderr, "[GL] Link error: \n%s\n", info );
+    free( info );
+    exit(-1);
+  }
+}
+
+void*
+geom_shdr_lines_init_device( void )
+{
+  geom_shader_lines_device_t* device = malloc( sizeof(geom_shader_lines_device_t ) );
+
+  // setup_shader_programa( device );
   const char* vs_src = 
     SHDR_VERSION
     SHDR_SOURCE(
@@ -84,112 +131,68 @@ setup_shader_programa( device_program_t* prog )
 
   glShaderSource( vertex_shader, 1, &vs_src, 0 );
   glCompileShader( vertex_shader );
-  GLuint status;
-  glGetShaderiv( vertex_shader, GL_COMPILE_STATUS, &status );
-  if( status == GL_FALSE )
-  {
-    int32_t info_len = 0;
-    glGetShaderiv( vertex_shader, GL_INFO_LOG_LENGTH, &info_len );
-    GLchar* info = malloc( info_len );
-    glGetShaderInfoLog( vertex_shader, info_len, &info_len, info );
-    fprintf( stderr, "[GL] Compile error: \n%s\n", info );
-    free( info );
-  }
+  geom_shader_lines_assert_shader_compiled( vertex_shader );
 
   glShaderSource( fragment_shader, 1, &fs_src, 0 );
   glCompileShader( fragment_shader );
-  glGetShaderiv( fragment_shader, GL_COMPILE_STATUS, &status );
-  if( status == GL_FALSE )
-  {
-    int32_t info_len = 0;
-    glGetShaderiv( fragment_shader, GL_INFO_LOG_LENGTH, &info_len );
-    GLchar* info = malloc( info_len );
-    glGetShaderInfoLog( fragment_shader, info_len, &info_len, info );
-    fprintf( stderr, "[GL] Compile error: \n%s\n", info );
-    free( info );
-  }
+  geom_shader_lines_assert_shader_compiled( fragment_shader );
 
   glShaderSource( geometry_shader, 1, &gs_src, 0 );
   glCompileShader( geometry_shader );
-  glGetShaderiv( geometry_shader, GL_COMPILE_STATUS, &status );
-  if( status == GL_FALSE )
-  {
-    int32_t info_len = 0;
-    glGetShaderiv( geometry_shader, GL_INFO_LOG_LENGTH, &info_len );
-    GLchar* info = malloc( info_len );
-    glGetShaderInfoLog( geometry_shader, info_len, &info_len, info );
-    fprintf( stderr, "[GL] Compile error: \n%s\n", info );
-    free( info );
-  }
+  geom_shader_lines_assert_shader_compiled( geometry_shader );
 
-  prog->id = glCreateProgram();
-  glAttachShader( prog->id, vertex_shader );
-  glAttachShader( prog->id, geometry_shader );
-  glAttachShader( prog->id, fragment_shader );
-  glLinkProgram( prog->id );
-  glGetProgramiv( prog->id, GL_LINK_STATUS, &status );
-  if( status == GL_FALSE )
-  {
-    int32_t info_len = 0;
-    glGetProgramiv( prog->id, GL_INFO_LOG_LENGTH, &info_len );
-    GLchar* info = malloc( info_len );
-    glGetProgramInfoLog( prog->id, info_len, &info_len, info );
-    fprintf( stderr, "[GL] Link error: \n%s\n", info );
-    free( info );
-  }
-  glDetachShader( prog->id, vertex_shader );
-  glDetachShader( prog->id, fragment_shader );
+  device->program_id = glCreateProgram();
+  glAttachShader( device->program_id, vertex_shader );
+  glAttachShader( device->program_id, geometry_shader );
+  glAttachShader( device->program_id, fragment_shader );
+  glLinkProgram( device->program_id );
+  geom_shader_lines_assert_program_linked( device->program_id );
+  
+  glDetachShader( device->program_id, vertex_shader );
+  glDetachShader( device->program_id, fragment_shader );
   glDeleteShader( vertex_shader );
   glDeleteShader( fragment_shader );
 
-  prog->pos_attrib_loc = glGetAttribLocation( prog->id, "pos" );
-  prog->col_attrib_loc = glGetAttribLocation( prog->id, "col" );
-}
+  device->attrib_pos_location = glGetAttribLocation( device->program_id, "pos" );
+  device->attrib_col_location = glGetAttribLocation( device->program_id, "col" );
 
-void
-setup_geometry_storagea( device_buffer_t* gpu_geo, const device_program_t* prog )
-{
+  // setup_geometry_storagea( device );
   GLuint  stream_idx = 0;
-  glCreateVertexArrays( 1, &gpu_geo->vao );
-  glCreateBuffers( 1, &gpu_geo->vbo );
-  glNamedBufferStorage( gpu_geo->vbo, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT );
+  glCreateVertexArrays( 1, &device->vao );
+  glCreateBuffers( 1, &device->vbo );
+  glNamedBufferStorage( device->vbo, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT );
 
-  glVertexArrayVertexBuffer( gpu_geo->vao, stream_idx, gpu_geo->vbo, 0, sizeof(vertex_t) );
+  glVertexArrayVertexBuffer( device->vao, stream_idx, device->vbo, 0, sizeof(vertex_t) );
 
-  glEnableVertexArrayAttrib( gpu_geo->vao, prog->pos_attrib_loc );
-  glEnableVertexArrayAttrib( gpu_geo->vao, prog->col_attrib_loc );
+  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_location );
+  glEnableVertexArrayAttrib( device->vao, device->attrib_col_location );
 
-  glVertexArrayAttribFormat( gpu_geo->vao, prog->pos_attrib_loc, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos) );
-  glVertexArrayAttribFormat( gpu_geo->vao, prog->col_attrib_loc, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_pos_location, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_col_location, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
 
-  glVertexArrayAttribBinding( gpu_geo->vao, prog->pos_attrib_loc, stream_idx );
-  glVertexArrayAttribBinding( gpu_geo->vao, prog->col_attrib_loc, stream_idx );
-}
-
-
-void
-geometry_shader_lines_setup( line_draw_device_t* device )
-{
-  setup_shader_programa( &device->program );
-  setup_geometry_storagea( &device->data, &device->program );
+  glVertexArrayAttribBinding( device->vao, device->attrib_pos_location, stream_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_col_location, stream_idx );
+  return device;
 }
 
 uint32_t
-geometry_shader_lines_update( line_draw_device_t* device, const void* data, int32_t n_elems, int32_t elem_size )
+geom_shdr_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size )
 {
-  glNamedBufferSubData( device->data.vbo, 0, n_elems*elem_size, data );
+  geom_shader_lines_device_t* device = device_in;
+  glNamedBufferSubData( device->vbo, 0, n_elems*elem_size, data );
   return n_elems;
 }
 
 void
-geometry_shader_lines_render( const line_draw_device_t* device, const int32_t count, const float* mvp )
+geom_shdr_lines_render( const void* device_in, const int32_t count, const float* mvp )
 {
-  glDisable(GL_CULL_FACE);
-  glUseProgram( device->program.id );
+  const geom_shader_lines_device_t* device = device_in;
+  
+  glUseProgram( device->program_id);
   glUniformMatrix4fv( 0, 1, GL_FALSE, mvp );
   glUniform1f( 1, 0.025f ); // Line width
 
-  glBindVertexArray( device->data.vao );
+  glBindVertexArray( device->vao );
   glDrawArrays( GL_LINES, 0, count );
 
   glBindVertexArray( 0 );

@@ -4,10 +4,9 @@
 
 void* cpu_lines_init_device();
 uint32_t cpu_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size );
-void cpu_lines( void* device, const int32_t count, const float* mvp );
+void cpu_lines_render( const void* device_in, const int32_t count, const float* mvp );
 
 #endif /* CPU_LINES_H */
-
 
 #ifdef CPU_LINES_IMPLEMENTATION
 
@@ -68,7 +67,7 @@ typedef struct cpu_lines_device
 void
 cpu_lines_assert_shader_compiled( GLuint shader_id )
 {
-  GLuint status;
+  GLint status;
   glGetShaderiv( shader_id, GL_COMPILE_STATUS, &status );
   if( status == GL_FALSE )
   {
@@ -85,7 +84,7 @@ cpu_lines_assert_shader_compiled( GLuint shader_id )
 void
 cpu_lines_assert_program_linked( GLuint program_id )
 {
-  GLuint status;
+  GLint status;
   glGetProgramiv( program_id, GL_LINK_STATUS, &status );
   if( status == GL_FALSE )
   {
