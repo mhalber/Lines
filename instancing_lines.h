@@ -141,13 +141,13 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
 void
 instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
 {
-  GLuint  stream_idx = 0;
+  GLuint  binding_idx = 0;
   glCreateVertexArrays( 1, &device->vao );
   glCreateBuffers( 1, &device->line_vbo );
   glNamedBufferStorage( device->line_vbo, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT );
 
-  glVertexArrayVertexBuffer( device->vao, stream_idx, device->line_vbo, 0, 2 * sizeof(vertex_t) );
-  glVertexArrayBindingDivisor( device->vao, stream_idx, 1 );
+  glVertexArrayVertexBuffer( device->vao, binding_idx, device->line_vbo, 0, 2 * sizeof(vertex_t) );
+  glVertexArrayBindingDivisor( device->vao, binding_idx, 1 );
 
   glEnableVertexArrayAttrib( device->vao, device->attrib_pos_0_location );
   glEnableVertexArrayAttrib( device->vao, device->attrib_col_0_location );
@@ -159,13 +159,13 @@ instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
   glVertexArrayAttribFormat( device->vao, device->attrib_pos_1_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, pos) );
   glVertexArrayAttribFormat( device->vao, device->attrib_col_1_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, col) );
 
-  glVertexArrayAttribBinding( device->vao, device->attrib_pos_0_location, stream_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_col_0_location, stream_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_pos_1_location, stream_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_col_1_location, stream_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_pos_0_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_col_0_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_pos_1_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_col_1_location, binding_idx );
 
 
-  stream_idx++;
+  binding_idx++;
 
   float quad[] = {  0.0, -0.5, 0.0,
                     0.0,  0.5, 0.0,
@@ -173,18 +173,19 @@ instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
                     1.0, -0.5, 0.0  };
   uint16_t ind[] = { 0, 1, 2,  0, 2, 3 };
   
+
   glCreateBuffers( 1, &device->quad_vbo );
   glCreateBuffers( 1, &device->quad_ebo );
 
-  glNamedBufferStorage( device->quad_vbo, 12*sizeof(float), quad, GL_DYNAMIC_STORAGE_BIT );
-  glNamedBufferStorage( device->quad_ebo, 6*sizeof(uint16_t), ind, GL_DYNAMIC_STORAGE_BIT );
+  glNamedBufferStorage( device->quad_vbo, sizeof(quad), quad, GL_DYNAMIC_STORAGE_BIT );
+  glNamedBufferStorage( device->quad_ebo, sizeof(ind), ind, GL_DYNAMIC_STORAGE_BIT );
 
-  glVertexArrayVertexBuffer( device->vao, stream_idx, device->quad_vbo, 0, 3*sizeof(float) );
+  glVertexArrayVertexBuffer( device->vao, binding_idx, device->quad_vbo, 0, 3*sizeof(float) );
   glVertexArrayElementBuffer( device->vao, device->quad_ebo );
 
   glEnableVertexArrayAttrib( device->vao, device->attrib_quad_pos_location );
   glVertexArrayAttribFormat( device->vao, device->attrib_quad_pos_location, 3, GL_FLOAT, GL_FALSE, 0 );
-  glVertexArrayAttribBinding( device->vao, device->attrib_quad_pos_location, stream_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_quad_pos_location, binding_idx );
 }
 
 void*
@@ -213,8 +214,7 @@ instancing_lines_render( const void* device_in, const int32_t count, const float
   glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, mvp );
 
   glBindVertexArray( device->vao );
-
-  glDrawElementsInstanced( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL, count / 2 );
+  glDrawElementsInstanced( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL, count>>1 );
 
   glBindVertexArray( 0 );
   glUseProgram( 0 );

@@ -21,7 +21,8 @@
   TODOs:
   [x] Implement CPU based line expansion (2D) -> User line buffer to gpu quad buffer.
   [ ] Add timing infrastracture
-  [ ]   -> How to time gpu time properly??
+  [x]   -> How to time gpu time properly?? Using performance counters maybe?
+
 
   [ ] Add a better / more taxing testing scheme
   [ ] Add on-screen display for timing -- nuklear / dbgdraw / custom thing using stbtt?
@@ -45,7 +46,6 @@ typedef struct vertex
 #include "cpu_lines.h"
 #include "geometry_shader_lines.h"
 #include "tex_buffer_lines.h"
-// #include "vp_shift_lines.h"
 #include "instancing_lines.h"
 
 typedef struct line_draw_engine
@@ -138,7 +138,7 @@ main(int32_t argc, char **argv)
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_DOUBLEBUFFER, GL_FALSE);
+  // glfwWindowHint(GLFW_DOUBLEBUFFER, GL_FALSE);
   GLFWwindow *window = glfwCreateWindow(window_width, window_height, "OGL Lines", NULL, NULL);
   if (!window)
   {
@@ -157,7 +157,7 @@ main(int32_t argc, char **argv)
   vertex_t *line_buf = malloc(line_buf_cap * sizeof(vertex_t));
 
   uint32_t active_idx = 4;
-  line_draw_engine_t engines[6] = {0};
+  line_draw_engine_t engines[5] = {0};
   setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render);
   setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render);
   setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render);
@@ -174,6 +174,8 @@ main(int32_t argc, char **argv)
                                              .zfar = 10.0f,
                                              .use_ortho = true});
   msh_mat4_t mvp = msh_mat4_mul(cam.proj, cam.view);
+  GLuint gl_timer_query;
+  GLCHECK( glGenQueries( 1, &gl_timer_query )) ;
 
   uint64_t t1, t2;
   while (!glfwWindowShouldClose(window))
@@ -192,26 +194,36 @@ main(int32_t argc, char **argv)
     line_buf_len = 0;
     generate_line_data(line_buf, &line_buf_len, line_buf_cap);
     t2 = msh_time_now();
+
     double diff1 = msh_time_diff_ms(t2, t1);
 
     glClearColor(0.12f, 0.12f, 0.12f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
+
     t1 = msh_time_now();
+
+    GLCHECK( glBeginQuery( GL_TIME_ELAPSED, gl_timer_query ) ); 
 
     line_draw_engine_t *active_engine = engines + active_idx;
     uint32_t elem_count = update(active_engine, line_buf, line_buf_len, sizeof(vertex_t));
     render(active_engine, elem_count, &mvp.data[0]);
-
-    glFlush();
-    glfwPollEvents();
+    
+    GLCHECK( glEndQuery( GL_TIME_ELAPSED ));
 
     t2 = msh_time_now();
     double diff2 = msh_time_diff_ms(t2, t1);
 
+    GLuint64 time_elapsed = 0;
+    glGetQueryObjectui64v(gl_timer_query, GL_QUERY_RESULT, &time_elapsed); 
+
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+
     char name[128] = {0};
-    snprintf(name, 128, "Lines - %6.4fms - %6.4fms", diff1, diff2);
+    double gpu_time = time_elapsed * 1e-6;
+    snprintf(name, 128, "Lines - %6.4fms - %6.4fms - %6.4fms", diff1, diff2, gpu_time );
     glfwSetWindowTitle(window, name);
   }
 
