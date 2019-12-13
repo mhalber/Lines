@@ -33,7 +33,11 @@
 
 typedef struct vertex
 {
-  msh_vec3_t pos;
+  union
+  {
+    struct { msh_vec3_t pos; float width; };
+    msh_vec4_t pos_width;
+  };
   msh_vec3_t col;
 } vertex_t;
 
@@ -53,13 +57,13 @@ typedef struct line_draw_engine
   void *device;
   void *(*init_device)(void);
   uint32_t (*update)(void *, const void *, int32_t, int32_t);
-  void (*render)(const void *, const int32_t, const float *);
+  void (*render)(const void *, const int32_t, const float *, const float *);
 } line_draw_engine_t;
 
-void setup(line_draw_engine_t *engine,
-           void *(*init_device_ptr)(void),
-           uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t),
-           void (*render_ptr)(const void *, const int32_t, const float *))
+void setup( line_draw_engine_t *engine,
+            void *(*init_device_ptr)(void),
+            uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t),
+            void (*render_ptr)(const void *, const int32_t, const float *, const float * ) )
 {
   engine->init_device = init_device_ptr;
   engine->update = update_ptr;
@@ -68,29 +72,30 @@ void setup(line_draw_engine_t *engine,
 }
 
 uint32_t
-update(line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t elem_size)
+update( line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t elem_size )
 {
   return engine->update(engine->device, data, n_elems, elem_size);
 }
 
-void render(line_draw_engine_t *engine, const int32_t count, const float *mvp)
+void render( line_draw_engine_t *engine, const int32_t count, const float *mvp, const float* viewport_size )
 {
-  return engine->render(engine->device, count, mvp);
+  return engine->render( engine->device, count, mvp, viewport_size );
 }
 
-void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf_cap)
+void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf_cap )
 {
+  #if 0
   vertex_t *dst1 = line_buf;
   vertex_t *dst2 = line_buf + 1;
 
-  int32_t grid_w = 50;
-  int32_t grid_h = 50;
-  int32_t grid_d = 50;
+  int32_t grid_w = 1;
+  int32_t grid_h = 1;
+  int32_t grid_d = 1;
   float grid_step = 0.1f;
 
-  int32_t circle_res = 6;
+  int32_t circle_res = 32;
   float d_theta = MSH_TWO_PI / circle_res;
-  float radius = 0.04f;
+  float radius = 1.4f;
 
   float r = 0.0;
   for (int32_t iz = -grid_d / 2; iz <= grid_d / 2; iz++)
@@ -117,10 +122,12 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
           y = cy + radius * cos(i * d_theta);
 
           dst1->pos = prev_pos;
+          dst1->width = 15.0f;
           dst2->pos = msh_vec3(x, y, z);
+          dst2->width = 15.0f;
           prev_pos = dst2->pos;
-          dst1->col = col;
-          dst2->col = col;
+          dst1->col = msh_vec3_zeros();
+          dst2->col = msh_vec3_zeros();
           dst1 += 2;
           dst2 += 2;
           *line_buf_len += 2;
@@ -134,6 +141,22 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
       }
     }
   }
+  #else
+    vertex_t *dst = line_buf;
+    *dst++ = (vertex_t){ .pos = msh_vec3( -1.2, -1.0, 0.0 ), .width = 3.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *dst++ = (vertex_t){ .pos = msh_vec3(  0.0,  1.0, 0.0 ), .width = 3.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *line_buf_len += 2;
+    *dst++ = (vertex_t){ .pos = msh_vec3( -0.6, -1.0, 0.0 ), .width = 6.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *dst++ = (vertex_t){ .pos = msh_vec3(  0.6,  1.0, 0.0 ), .width = 6.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *line_buf_len += 2;
+    *dst++ = (vertex_t){ .pos = msh_vec3(  0.0, -1.0, 0.0 ), .width = 9.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *dst++ = (vertex_t){ .pos = msh_vec3(  1.2,  1.0, 0.0 ), .width = 9.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *line_buf_len += 2;
+    *dst++ = (vertex_t){ .pos = msh_vec3(  0.6, -1.0, 0.0 ), .width = 12.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *dst++ = (vertex_t){ .pos = msh_vec3(  1.8,  1.0, 0.0 ), .width = 12.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
+    *line_buf_len += 2;
+
+  #endif
 }
 
 int32_t
@@ -150,8 +173,9 @@ main(int32_t argc, char **argv)
   int32_t window_width = 1024, window_height = 1024;
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+  // glfwWindowHint(GLFW_SAMPLES, 4);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  // glfwWindowHint(GLFW_DOUBLEBUFFER, GL_FALSE);
+  
   GLFWwindow *window = glfwCreateWindow(window_width, window_height, "OGL Lines", NULL, NULL);
   if (!window)
   {
@@ -160,7 +184,7 @@ main(int32_t argc, char **argv)
   }
 
   glfwMakeContextCurrent(window);
-  glfwSwapInterval( 0 );
+  
   if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
   {
     return EXIT_FAILURE;
@@ -170,23 +194,23 @@ main(int32_t argc, char **argv)
   uint32_t line_buf_len;
   vertex_t *line_buf = malloc(line_buf_cap * sizeof(vertex_t));
 
-  uint32_t active_idx = 4;
+  uint32_t active_idx = 2;
   line_draw_engine_t engines[5] = {0};
-  setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render);
-  setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render);
+  // setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render);
+  // setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render);
   setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render);
-  setup(engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render);
-  setup(engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render);
+  // setup(engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render);
+  // setup(engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render);
 
   msh_camera_t cam = {0};
-  msh_camera_init(&cam, &(msh_camera_desc_t){.eye = msh_vec3( 6.0f, 6.0f, 6.0f ),
+  msh_camera_init(&cam, &(msh_camera_desc_t){.eye = msh_vec3( 0.0f, 0.0f, 6.0f ),
                                              .center = msh_vec3_zeros(),
                                              .up = msh_vec3_posy(),
                                              .viewport = msh_vec4(0.0f, 0.0f, window_width, window_height),
                                              .fovy = msh_rad2deg(60),
                                              .znear = 0.01f,
                                              .zfar = 100.0f,
-                                             .use_ortho = false });
+                                             .use_ortho = true });
   msh_mat4_t vp = msh_mat4_mul(cam.proj, cam.view);
   double timers[3] = { 0.0, 0.0, 0.0 };
   uint64_t frame_idx = 0;
@@ -194,6 +218,10 @@ main(int32_t argc, char **argv)
 
   GLuint gl_timer_query;
   GLCHECK( glGenQueries( 1, &gl_timer_query )) ;
+  glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDisable(GL_DEPTH_TEST);
   while (!glfwWindowShouldClose(window))
   {
     // Update the camera
@@ -204,6 +232,8 @@ main(int32_t argc, char **argv)
       cam.viewport.w = window_height;
       msh_camera_update_proj(&cam);
       vp = msh_mat4_mul(cam.proj, cam.view);
+      int32_t fb_w, fb_h;
+      glfwGetFramebufferSize( window, &fb_w, &fb_h );
     }
     uint64_t t1, t2;
     
@@ -212,7 +242,7 @@ main(int32_t argc, char **argv)
     generate_line_data(line_buf, &line_buf_len, line_buf_cap);
     angle += 0.1f;
     if( angle >= 360.0f ) { angle = 0.0f; }
-    msh_mat4_t model = msh_post_rotate( msh_mat4_identity(), msh_deg2rad(angle), msh_vec3_posy() );
+    msh_mat4_t model = msh_mat4_identity();//msh_post_rotate( msh_mat4_identity(), msh_deg2rad(angle), msh_vec3_posy() );
     msh_mat4_t mvp = msh_mat4_mul(vp, model);
     t2 = msh_time_now();
 
@@ -222,13 +252,13 @@ main(int32_t argc, char **argv)
     GLCHECK( glBeginQuery( GL_TIME_ELAPSED, gl_timer_query ) ); 
     t1 = msh_time_now();
 
-    glClearColor(0.12f, 0.12f, 0.12f, 1.0f);
+    glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
     line_draw_engine_t *active_engine = engines + active_idx;
     uint32_t elem_count = update(active_engine, line_buf, line_buf_len, sizeof(vertex_t));
-    render(active_engine, elem_count, &mvp.data[0]);
+    render(active_engine, elem_count, &mvp.data[0], &cam.viewport.z );
 
     t2 = msh_time_now();
     GLCHECK( glEndQuery( GL_TIME_ELAPSED ));
