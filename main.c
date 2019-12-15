@@ -14,9 +14,6 @@
 
 #include "gl_utils.h"
 
-#define SHDR_VERSION "#version 450 core\n"
-#define SHDR_SOURCE(x) #x
-
 #define MAX_VERTS 3 * 12 * 1024 * 1024
 
 /*
@@ -60,16 +57,20 @@ typedef struct line_draw_engine
   void *(*init_device)(void);
   uint32_t (*update)(void *, const void *, int32_t, int32_t);
   void (*render)(const void *, const int32_t, const float *, const float *);
+  void (*term_device)(void**);
 } line_draw_engine_t;
 
 void setup( line_draw_engine_t *engine,
             void *(*init_device_ptr)(void),
             uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t),
-            void (*render_ptr)(const void *, const int32_t, const float *, const float * ) )
+            void (*render_ptr)(const void *, const int32_t, const float *, const float * ),
+            void (*term_device_ptr)(void**) )
 {
   engine->init_device = init_device_ptr;
   engine->update = update_ptr;
   engine->render = render_ptr;
+  engine->term_device = term_device_ptr;
+
   engine->device = engine->init_device();
 }
 
@@ -82,6 +83,11 @@ update( line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t e
 void render( line_draw_engine_t *engine, const int32_t count, const float *mvp, const float* viewport_size )
 {
   return engine->render( engine->device, count, mvp, viewport_size );
+}
+
+void terminate( line_draw_engine_t* engine )
+{
+  return engine->term_device( &engine->device );
 }
 
 void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf_cap )
@@ -187,13 +193,15 @@ main(int32_t argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  int32_t window_width = 1024, window_height = 1024;
+  int32_t window_width = 1024, window_height = 512;
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
   // glfwWindowHint(GLFW_SAMPLES, 4);
   glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  
+
+  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE );
+
   GLFWwindow *window = glfwCreateWindow(window_width, window_height, "OGL Lines", NULL, NULL);
   if (!window)
   {
@@ -207,6 +215,15 @@ main(int32_t argc, char **argv)
   {
     return EXIT_FAILURE;
   }
+  
+  GLint flags;
+  glGetIntegerv( GL_CONTEXT_FLAGS, &flags );
+  if( flags & GL_CONTEXT_FLAG_DEBUG_BIT )
+  {
+    glEnable( GL_DEBUG_OUTPUT );
+    glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
+    glDebugMessageCallback( gl_utils_debug_msg_call_back, NULL );
+  }
 
   uint32_t line_buf_cap = MAX_VERTS / 3;
   uint32_t line_buf_len;
@@ -216,7 +233,7 @@ main(int32_t argc, char **argv)
   line_draw_engine_t engines[5] = {0};
   // setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render);
   // setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render);
-  setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render);
+  setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render, &geom_shdr_lines_term_device );
   // setup(engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render);
   // setup(engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render);
 
@@ -234,15 +251,11 @@ main(int32_t argc, char **argv)
   uint64_t frame_idx = 0;
   float angle = 0.0f;
 
-  glEnable( GL_DEBUG_OUTPUT );
-  glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
-  glDebugMessageCallback( gl_utils_debug_msg_call_back, NULL );
-
   GLuint gl_timer_query;
   glGenQueries( 1, &gl_timer_query );
   glEnable(GL_BLEND);
-	glBlendEquation(GL_FUNC_ADD);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glBlendEquation(GL_FUNC_ADD);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_DEPTH_TEST);
   while (!glfwWindowShouldClose(window))
   {
@@ -309,6 +322,8 @@ main(int32_t argc, char **argv)
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
+
+  terminate( engines + 2 );
 
   glfwTerminate();
   return EXIT_SUCCESS;

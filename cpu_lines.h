@@ -102,8 +102,8 @@ void
 cpu_lines_create_shader_program( cpu_lines_device_t* device )
 {
   const char* vs_src = 
-    SHDR_VERSION
-    SHDR_SOURCE(
+    GL_UTILS_SHDR_VERSION
+    GL_UTILS_SHDR_SOURCE(
       layout(location = 0) in vec3 pos;
       layout(location = 1) in vec3 col;
       
@@ -119,8 +119,8 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
     );
   
   const char* fs_src = 
-    SHDR_VERSION
-    SHDR_SOURCE(
+    GL_UTILS_SHDR_VERSION
+    GL_UTILS_SHDR_SOURCE(
       in vec3 v_col;
       out vec4 frag_color;
       void main()

@@ -81,12 +81,12 @@ tex_buffer_lines_init_device()
   memset( device, 0, sizeof(tex_buffer_lines_device_t) );
 
   const char* vs_src = 
-    SHDR_VERSION
+    GL_UTILS_SHDR_VERSION
 #if USE_BINDLESS_TEXTURES
     "#extension GL_ARB_bindless_texture : require\n"
     "#extension GL_ARB_gpu_shader_int64 : require\n"
 #endif
-    SHDR_SOURCE(
+    GL_UTILS_SHDR_SOURCE(
       
       layout(location = 0) uniform mat4 u_mvp;
 #if USE_BINDLESS_TEXTURES
@@ -138,8 +138,8 @@ tex_buffer_lines_init_device()
     );
   
   const char* fs_src =
-    SHDR_VERSION
-    SHDR_SOURCE(
+    GL_UTILS_SHDR_VERSION
+    GL_UTILS_SHDR_SOURCE(
       in vec3 v_col;
       out vec4 frag_color;
       void main()
@@ -154,17 +154,17 @@ tex_buffer_lines_init_device()
 
   glShaderSource( vertex_shader, 1, &vs_src, 0 );
   glCompileShader( vertex_shader );
-  gl_lines_assert_shader_compiled( vertex_shader );
+  gl_utils_assert_shader_compiled( vertex_shader, "VERTEX_SHADER" );
 
   glShaderSource( fragment_shader, 1, &fs_src, 0 );
   glCompileShader( fragment_shader );
-  gl_lines_assert_shader_compiled( fragment_shader );
+  gl_utils_assert_shader_compiled( fragment_shader, "FRAGMENT_SHADER" );
 
   device->program_id = glCreateProgram();
   glAttachShader( device->program_id, vertex_shader );
   glAttachShader( device->program_id, fragment_shader );
   glLinkProgram( device->program_id );
-  gl_lines_assert_program_linked( device->program_id );
+  gl_utils_assert_program_linked( device->program_id );
 
   glDetachShader( device->program_id, vertex_shader );
   glDetachShader( device->program_id, fragment_shader );
