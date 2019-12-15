@@ -12,6 +12,8 @@
 #include "msh/msh_vec_math.h"
 #include "msh/msh_camera.h"
 
+#include "gl_utils.h"
+
 #define SHDR_VERSION "#version 450 core\n"
 #define SHDR_SOURCE(x) #x
 
@@ -232,8 +234,12 @@ main(int32_t argc, char **argv)
   uint64_t frame_idx = 0;
   float angle = 0.0f;
 
+  glEnable( GL_DEBUG_OUTPUT );
+  glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
+  glDebugMessageCallback( gl_utils_debug_msg_call_back, NULL );
+
   GLuint gl_timer_query;
-  GLCHECK( glGenQueries( 1, &gl_timer_query )) ;
+  glGenQueries( 1, &gl_timer_query );
   glEnable(GL_BLEND);
 	glBlendEquation(GL_FUNC_ADD);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -265,7 +271,7 @@ main(int32_t argc, char **argv)
     double diff1 = msh_time_diff_ms(t2, t1);
     timers[0] += diff1;
 
-    GLCHECK( glBeginQuery( GL_TIME_ELAPSED, gl_timer_query ) ); 
+    glBeginQuery( GL_TIME_ELAPSED, gl_timer_query );
     t1 = msh_time_now();
 
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -277,13 +283,13 @@ main(int32_t argc, char **argv)
     render(active_engine, elem_count, &mvp.data[0], &cam.viewport.z );
 
     t2 = msh_time_now();
-    GLCHECK( glEndQuery( GL_TIME_ELAPSED ));
+    glEndQuery( GL_TIME_ELAPSED );
 
     double diff2 = msh_time_diff_ms(t2, t1);
     timers[1] += diff2;
 
     GLuint64 time_elapsed = 0;
-    GLCHECK( glGetQueryObjectui64v( gl_timer_query, GL_QUERY_RESULT, &time_elapsed ) ); 
+    glGetQueryObjectui64v( gl_timer_query, GL_QUERY_RESULT, &time_elapsed );  
 
     timers[2] += time_elapsed * 1e-6;
 

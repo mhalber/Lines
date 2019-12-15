@@ -27,7 +27,6 @@ typedef struct instancing_lines_device
 } instancing_lines_device_t;
 
 
-// TODO(maciej): Maybe move into a little gl_utils.h file.
 void
 instancing_lines_assert_shader_compiled( GLuint shader_id )
 {

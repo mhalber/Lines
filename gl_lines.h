@@ -22,7 +22,6 @@ typedef struct gl_lines_device
 } gl_lines_device_t;
 
 
-// TODO(maciej): Maybe move into a little gl_utils.h file.
 void
 gl_lines_assert_shader_compiled( GLuint shader_id )
 {
