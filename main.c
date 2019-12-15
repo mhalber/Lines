@@ -55,15 +55,15 @@ typedef struct line_draw_engine
 {
   void *device;
   void *(*init_device)(void);
-  uint32_t (*update)(void *, const void *, int32_t, int32_t);
-  void (*render)(const void *, const int32_t, const float *, const float *);
+  uint32_t (*update)(void *, const void *, int32_t, int32_t, float *, float *);
+  void (*render)(const void *, const int32_t);
   void (*term_device)(void**);
 } line_draw_engine_t;
 
 void setup( line_draw_engine_t *engine,
             void *(*init_device_ptr)(void),
-            uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t),
-            void (*render_ptr)(const void *, const int32_t, const float *, const float * ),
+            uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t, float *, float *),
+            void (*render_ptr)(const void *, const int32_t ),
             void (*term_device_ptr)(void**) )
 {
   engine->init_device = init_device_ptr;
@@ -75,14 +75,14 @@ void setup( line_draw_engine_t *engine,
 }
 
 uint32_t
-update( line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t elem_size )
+update( line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport )
 {
-  return engine->update(engine->device, data, n_elems, elem_size);
+  return engine->update(engine->device, data, n_elems, elem_size, mvp, viewport );
 }
 
-void render( line_draw_engine_t *engine, const int32_t count, const float *mvp, const float* viewport_size )
+void render( line_draw_engine_t *engine, const int32_t count )
 {
-  return engine->render( engine->device, count, mvp, viewport_size );
+  return engine->render( engine->device, count );
 }
 
 void terminate( line_draw_engine_t* engine )
@@ -292,8 +292,8 @@ main(int32_t argc, char **argv)
     glViewport(0, 0, window_width, window_height);
 
     line_draw_engine_t *active_engine = engines + active_idx;
-    uint32_t elem_count = update(active_engine, line_buf, line_buf_len, sizeof(vertex_t));
-    render(active_engine, elem_count, &mvp.data[0], &cam.viewport.z );
+    uint32_t elem_count = update(active_engine, line_buf, line_buf_len, sizeof(vertex_t), &mvp.data[0], &cam.viewport.z);
+    render(active_engine, elem_count );
 
     t2 = msh_time_now();
     glEndQuery( GL_TIME_ELAPSED );

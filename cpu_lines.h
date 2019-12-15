@@ -3,8 +3,9 @@
 #define CPU_LINES_H
 
 void* cpu_lines_init_device();
-uint32_t cpu_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size );
-void cpu_lines_render( const void* device, const int32_t count, const float* mvp, const float* viewport );
+uint32_t cpu_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size,
+                           float* mvp, float* viewport );
+void cpu_lines_render( const void* device, const int32_t count );
 void cpu_lines_term_device( void** device );
 
 #endif /* CPU_LINES_H */
@@ -13,7 +14,8 @@ void cpu_lines_term_device( void** device );
 
 void
 cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
-                  vertex_t* quad_buf, uint32_t *quad_buf_len, uint32_t quad_buf_cap )
+                  vertex_t* quad_buf, uint32_t *quad_buf_len, uint32_t quad_buf_cap,
+                  msh_mat4_t* mvp, msh_vec2_t* viewport_size )
 {
   if( line_buf_len * 3 >= quad_buf_cap )
   {
@@ -30,8 +32,8 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
 
     msh_vec3_t dir = msh_vec3_normalize( msh_vec3_sub( src_v1->pos, src_v0->pos ) );
     msh_vec3_t normal = msh_vec3( -dir.y, dir.x, dir.z );
-    msh_vec3_t l0 = msh_vec3_scalar_mul( normal, src_v0->width );
-    msh_vec3_t l1 = msh_vec3_scalar_mul( normal, src_v1->width );
+    msh_vec3_t l0 = msh_vec3_scalar_mul( normal, src_v0->width * 0.01f );
+    msh_vec3_t l1 = msh_vec3_scalar_mul( normal, src_v1->width * 0.01f );
 
     (dst + 0)->pos = msh_vec3_add( src_v0->pos, l0 );
     (dst + 0)->col = src_v0->col;
@@ -165,23 +167,26 @@ void cpu_lines_term_device( void** device_in )
 }
 
 uint32_t
-cpu_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size )
+cpu_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size,
+                  float* mvp, float* viewport )
 {
-  const cpu_lines_device_t* device = device_in;
-  // NOTE(maciej): It might be an issue - might need viewpoint / mvp in expansion...
+  cpu_lines_device_t* device = device_in;
+  device->mvp = mvp;
+  device->viewport = viewport;
   uint32_t quad_buf_len = 0;
-  cpu_lines_expand( data, n_elems, device->quad_buf, &quad_buf_len, MAX_VERTS );
-  glNamedBufferSubData( device->vbo, 0, quad_buf_len * elem_size,device->quad_buf );
+  msh_mat4_t mvp_mat; memcpy( mvp_mat.data, device->mvp, 16*sizeof(float) );
+  msh_vec2_t viewport_size; memcpy( viewport_size.data, device->viewport, 2*sizeof(float) );
+  cpu_lines_expand( data, n_elems, device->quad_buf, &quad_buf_len, MAX_VERTS, &mvp_mat, &viewport_size );
+  glNamedBufferSubData( device->vbo, 0, quad_buf_len * elem_size, device->quad_buf );
   return quad_buf_len;
 }
 
 void
-cpu_lines_render( const void* device_in, const int32_t count, const float* mvp, const float* viewport )
+cpu_lines_render( const void* device_in, const int32_t count )
 {
-  (void)viewport;
   const cpu_lines_device_t* device = device_in;
   glUseProgram( device->program_id );
-  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, mvp );
+  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->mvp );
 
   glBindVertexArray( device->vao );
   glDrawArrays( GL_TRIANGLES, 0, count );
