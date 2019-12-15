@@ -2,8 +2,8 @@
 #define GL_LINES_H
 
 void* gl_lines_init_device( void );
-uint32_t gl_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size );
-void gl_lines_render( const void* device, const int32_t count, const float* mvp, const float* viewport );
+uint32_t gl_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport );
+void gl_lines_render( const void* device, const int32_t count );
 void gl_lines_term_device( void** device );
 
 //TODO(maciej): Terminate device!
@@ -28,6 +28,8 @@ typedef struct gl_lines_device
   GLuint program_id;
   GLuint vao;
   GLuint vbo;
+  float* mvp;
+  float* viewport;
   gl_lines_uniform_locations_t uniforms;
   gl_lines_attrib_locations_t attribs;
 } gl_lines_device_t;
@@ -124,21 +126,22 @@ gl_lines_term_device( void** device_in )
 }
 
 uint32_t
-gl_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size )
+gl_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport )
 {
   gl_lines_device_t* device = device_in;
+  device->mvp = mvp;
+  device->viewport = viewport;
   glNamedBufferSubData( device->vbo, 0, n_elems*elem_size, data );
   return n_elems;
 }
 
 void
-gl_lines_render( const void* device_in, const int32_t count, const float* mvp, const float* viewport )
+gl_lines_render( const void* device_in, const int32_t count )
 {
-  (void)viewport;
   const gl_lines_device_t* device = device_in;
 
   glUseProgram( device->program_id );
-  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, mvp );
+  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->mvp );
 
   glBindVertexArray( device->vao );
   glDrawArrays( GL_LINES, 0, count );
