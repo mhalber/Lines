@@ -1,14 +1,6 @@
 #ifndef GEOMETRY_SHADER_LINES_H
 #define GEOMETRY_SHADER_LINES_H
 
-/* 
-TODO(maciej): 
-Allow passing in the line width
-Ensure that the device data is in these files, so that they are self contained.
-Add explicit uniform location to the shader generation and store them in the device data.
-Also explicit attrib location?
-*/
-
 void* geom_shdr_lines_init_device( void );
 uint32_t geom_shdr_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size );
 void geom_shdr_lines_render( const void* device, const int32_t count, const float* mvp, const float* viewport );
@@ -24,6 +16,7 @@ typedef struct geom_shader_lines_device
   // Group uniforms and attribs in separate struct?
   GLuint uniform_mvp_location;
   GLuint uniform_viewport_size_location;
+  GLuint uniform_aa_radius_location;
   GLuint attrib_pos_width_location;
   GLuint attrib_col_location;
   GLuint vao;
@@ -68,8 +61,6 @@ void*
 geom_shdr_lines_init_device( void )
 {
   geom_shader_lines_device_t* device = malloc( sizeof(geom_shader_lines_device_t ) );
-
-  // setup_shader_programa( device );
   const char* vs_src = 
     SHDR_VERSION
     SHDR_SOURCE(
@@ -96,61 +87,66 @@ geom_shdr_lines_init_device( void )
       layout(triangle_strip, max_vertices = 4) out;
 
       layout(location = 1) uniform vec2 u_viewport_size;
+      layout(location = 2) uniform vec2 u_aa_radius;
 
       in vec3 v_col[];
       in noperspective float v_line_width[];
 
-      out vec3 g_col;
+      out vec4 g_col;
       out noperspective float g_line_width;
-      out noperspective float g_u_dist;
       out noperspective float g_line_length;
-      out noperspective float g_v_dist;
+      out noperspective float g_u;
+      out noperspective float g_v;
 
       void main()
       {
         float u_width = u_viewport_size[0];
         float u_height = u_viewport_size[1];
         float u_aspect_ratio = u_height / u_width;
-        
+
         vec2 p_a = gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w;
         vec2 p_b = gl_in[1].gl_Position.xy / gl_in[1].gl_Position.w;
-        
+
         vec2 dir = p_b - p_a;
-        vec2 dir2 = dir * u_viewport_size;
+
+        vec2 viewport_dir= dir  * u_viewport_size;
+        float extension_length = (1.5 + u_aa_radius[1]);
+        float line_length = length( viewport_dir ) + 2*extension_length;
+      
         dir = normalize(vec2( dir.x, dir.y * u_aspect_ratio ));
-        float line_length = length( dir2 );
 
-        vec2 normal_a    = vec2( v_line_width[0]/u_width, v_line_width[0]/u_height ) * vec2( -dir.y, dir.x );
-        vec2 normal_b    = vec2( v_line_width[1]/u_width, v_line_width[1]/u_height ) * vec2( -dir.y, dir.x );
-        vec2 extension = vec2(0.0, 0.0);//vec2( 1.1/u_width, 1.1/u_height ) * dir;
+        float line_width_0 = v_line_width[0] + u_aa_radius[0];
+        float line_width_1 = v_line_width[1] + u_aa_radius[0];
+        vec2 normal_a  = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2( -dir.y, dir.x );
+        vec2 normal_b  = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2( -dir.y, dir.x );
+        vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
 
-
-        g_col = v_col[0];
-        g_u_dist = v_line_width[0];
-        g_v_dist = line_length * 0.5;
-        g_line_width = v_line_width[0];
+        g_col = vec4( v_col[0], 1.0f );//smoothstep(0.0, 1.0, v_line_width[0] / u_aa_radius[0] ));
+        g_u = 1.0;
+        g_v = 1.0;
+        g_line_width = line_width_0;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (p_a + normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
         
-        g_u_dist = -v_line_width[0];
-        g_v_dist = line_length * 0.5;
-        g_line_width = v_line_width[0];
+        g_u = -1.0;
+        g_v = 1.0;
+        g_line_width = line_width_0;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (p_a - normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
         
-        g_col = v_col[1];
-        g_u_dist = v_line_width[1];
-        g_v_dist = -line_length * 0.5;
-        g_line_width = v_line_width[1];
+        g_col = vec4( v_col[1], 1.0f );//smoothstep(0.0, 1.0, v_line_width[1] / u_aa_radius[1] ));
+        g_u = 1.0;
+        g_v = -1.0;
+        g_line_width = line_width_1;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (p_b + normal_b + extension) * gl_in[1].gl_Position.w, gl_in[1].gl_Position.zw );
         EmitVertex();
         
-        g_u_dist = -v_line_width[1];
-        g_v_dist = -line_length * 0.5;
-        g_line_width = v_line_width[1];
+        g_u = -1.0;
+        g_v = -1.0;
+        g_line_width = line_width_1;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (p_b - normal_b + extension) * gl_in[1].gl_Position.w, gl_in[1].gl_Position.zw );
         EmitVertex();
@@ -162,21 +158,27 @@ geom_shdr_lines_init_device( void )
   const char* fs_src = 
     SHDR_VERSION
     SHDR_SOURCE(
-      in vec3 g_col;
-      in noperspective float g_u_dist;
+      layout(location = 2) uniform vec2 u_aa_radius;
+      
+      in vec4 g_col;
+      in noperspective float g_u;
+      in noperspective float g_v;
       in noperspective float g_line_width;
       in noperspective float g_line_length;
-      in noperspective float g_v_dist;
 
       out vec4 frag_color;
       void main()
       {
-        // float u = abs( g_u_dist ) / g_line_width;
-        float v = abs( g_v_dist ) / g_line_length;
-        // float a = 1.0 - smoothstep( 1-(2.0/g_line_width), 1.0, u );
-        float a = 1.0 - smoothstep( 1.0 - (2.0 / g_line_length), 1.0, v );
-        frag_color = vec4( g_col, 1.0 );
-        frag_color.a *= a;
+        /* We render a quad that is fattened by r, giving total width of the line to be w+r. We want smoothing to happen
+           around w, so that the edge is properly smoothed out. As such, in the smoothstep function we have:
+           Far edge   : 1.0                                          = (w+r) / (w+r)
+           Close edge : 1.0 - (2r / (w+r)) = (w+r)/(w+r) - 2r/(w+r)) = (w-r) / (w+r)
+           This way the smoothing is centered around 'w'.
+         */
+        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / g_line_width),  1.0, abs(g_u) );
+        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / g_line_length), 1.0, abs(g_v) );
+        frag_color = g_col;
+        frag_color.a *= min(av, au);
       }
     );
 
@@ -212,6 +214,7 @@ geom_shdr_lines_init_device( void )
   device->attrib_col_location = glGetAttribLocation( device->program_id, "col" );
   device->uniform_mvp_location = glGetUniformLocation( device->program_id, "u_mvp" );
   device->uniform_viewport_size_location = glGetUniformLocation( device->program_id, "u_viewport_size" );
+  device->uniform_aa_radius_location = glGetUniformLocation( device->program_id, "u_aa_radius" );
 
   GLuint  binding_idx = 0;
   glCreateVertexArrays( 1, &device->vao );
@@ -247,6 +250,7 @@ geom_shdr_lines_render( const void* device_in, const int32_t count, const float*
   glUseProgram( device->program_id);
   glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, mvp );
   glUniform2fv( device->uniform_viewport_size_location, 1, viewport );
+  glUniform2f( device->uniform_aa_radius_location, 2.0f, 2.0f );
 
   glBindVertexArray( device->vao );
   glDrawArrays( GL_LINES, 0, count );

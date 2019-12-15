@@ -93,7 +93,7 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
   int32_t grid_d = 1;
   float grid_step = 0.1f;
 
-  int32_t circle_res = 32;
+  int32_t circle_res = 6;
   float d_theta = MSH_TWO_PI / circle_res;
   float radius = 1.4f;
 
@@ -143,18 +143,33 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
   }
   #else
     vertex_t *dst = line_buf;
-    *dst++ = (vertex_t){ .pos = msh_vec3( -1.2, -1.0, 0.0 ), .width = 3.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *dst++ = (vertex_t){ .pos = msh_vec3(  0.0,  1.0, 0.0 ), .width = 3.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *line_buf_len += 2;
-    *dst++ = (vertex_t){ .pos = msh_vec3( -0.6, -1.0, 0.0 ), .width = 6.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *dst++ = (vertex_t){ .pos = msh_vec3(  0.6,  1.0, 0.0 ), .width = 6.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *line_buf_len += 2;
-    *dst++ = (vertex_t){ .pos = msh_vec3(  0.0, -1.0, 0.0 ), .width = 9.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *dst++ = (vertex_t){ .pos = msh_vec3(  1.2,  1.0, 0.0 ), .width = 9.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *line_buf_len += 2;
-    *dst++ = (vertex_t){ .pos = msh_vec3(  0.6, -1.0, 0.0 ), .width = 12.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *dst++ = (vertex_t){ .pos = msh_vec3(  1.8,  1.0, 0.0 ), .width = 12.0, .col = msh_vec3( 0.0, 0.0, 0.0 ) };
-    *line_buf_len += 2;
+    float line_width = 0.5;
+    for( float f = -3.6; f < 0.6 + 0.1; f+= 0.3 )
+    {
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.2, -1.0, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.2,  1.0, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
+      *line_buf_len += 2;
+      line_width += 0.5;
+    }
+    int32_t circle_res = 32;
+    float d_theta = MSH_TWO_PI / circle_res;
+    float radius1 = 0.1f;
+    float radius2 = 1.0f;
+    float cx = 2.1;
+    float cy = 0.0;
+    line_width = 1.0;
+    for (int i = 0; i < circle_res; ++i)
+    {
+      float x1 = cx + radius1 * sin(i * d_theta);
+      float y1 = cy + radius1 * cos(i * d_theta);
+
+      float x2 = cx + radius2 * sin(i * d_theta);
+      float y2 = cy + radius2 * cos(i * d_theta);
+
+      *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
+      *line_buf_len += 2;
+    }
 
   #endif
 }
@@ -174,6 +189,7 @@ main(int32_t argc, char **argv)
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
   // glfwWindowHint(GLFW_SAMPLES, 4);
+  glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   
   GLFWwindow *window = glfwCreateWindow(window_width, window_height, "OGL Lines", NULL, NULL);
@@ -252,7 +268,7 @@ main(int32_t argc, char **argv)
     GLCHECK( glBeginQuery( GL_TIME_ELAPSED, gl_timer_query ) ); 
     t1 = msh_time_now();
 
-    glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
