@@ -60,39 +60,43 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
     msh_vec2_t viewport_line = msh_vec2_mul( dir, viewport_size );
     dir = msh_vec2_normalize( msh_vec2( dir.x, dir.y*aspect_ratio ) );
 
-    float line_width_a = src_v0->width * aa_radius.x;
-    float line_width_b = src_v1->width * aa_radius.x;
-    float line_length  = msh_vec2_norm( viewport_line );
+    float line_width_a = src_v0->width + aa_radius.x;
+    float line_width_b = src_v1->width + aa_radius.x;
+    float extension_length = (1.5f + aa_radius.y);
+    float line_length  = msh_vec2_norm( viewport_line ) + 2.0*extension_length;
 
     msh_vec2_t normal_a = msh_vec2_mul( msh_vec2( line_width_a/width, line_width_a/height), msh_vec2( -dir.y, dir.x ) );
     msh_vec2_t normal_b = msh_vec2_mul( msh_vec2( line_width_b/width, line_width_b/height), msh_vec2( -dir.y, dir.x ) );
 
-    clip_a1 = msh_vec4( (ndc_a.x - normal_a.x)*clip_a0.w, (ndc_a.y - normal_a.y) * clip_a0.w, clip_a0.z, clip_a0.w );
-    clip_a0 = msh_vec4( (ndc_a.x + normal_a.x)*clip_a0.w, (ndc_a.y + normal_a.y) * clip_a0.w, clip_a0.z, clip_a0.w );
+    clip_a1 = msh_vec4( (ndc_a.x - normal_a.x) * clip_a0.w, (ndc_a.y - normal_a.y) * clip_a0.w, clip_a0.z, clip_a0.w );
+    clip_a0 = msh_vec4( (ndc_a.x + normal_a.x) * clip_a0.w, (ndc_a.y + normal_a.y) * clip_a0.w, clip_a0.z, clip_a0.w );
 
-    clip_b1 = msh_vec4( (ndc_b.x - normal_b.x)*clip_b0.w, (ndc_b.y - normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
-    clip_b0 = msh_vec4( (ndc_b.x + normal_b.x)*clip_b0.w, (ndc_b.y + normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
-
+    clip_b1 = msh_vec4( (ndc_b.x - normal_b.x) * clip_b0.w, (ndc_b.y - normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
+    clip_b0 = msh_vec4( (ndc_b.x + normal_b.x) * clip_b0.w, (ndc_b.y + normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
 
     (dst + 0)->clip_pos = clip_a0;
     (dst + 0)->col = src_v0->col;
-    (dst + 0)->line_params = msh_vec4( 1.0, -1.0, line_width_a, line_length );
+    (dst + 0)->line_params = msh_vec4( -1.0, -1.0, line_width_a, line_length );
+
     (dst + 1)->clip_pos = clip_a1;
     (dst + 1)->col = src_v0->col;
-    (dst + 1)->line_params = msh_vec4( -1.0, -1.0, line_width_a, line_length );
+    (dst + 1)->line_params = msh_vec4( 1.0, -1.0, line_width_a, line_length );
+
     (dst + 2)->clip_pos = clip_b0;
     (dst + 2)->col = src_v1->col;
-    (dst + 2)->line_params = msh_vec4( 1.0, 1.0, line_width_b, line_length );
+    (dst + 2)->line_params = msh_vec4( -1.0, 1.0, line_width_b, line_length );
 
     (dst + 3)->clip_pos = clip_a1;
     (dst + 3)->col = src_v0->col;
-    (dst + 3)->line_params = msh_vec4( -1.0, -1.0, line_width_a, line_length );
+    (dst + 3)->line_params = msh_vec4( 1.0, -1.0, line_width_a, line_length );
+
     (dst + 4)->clip_pos = clip_b0;
     (dst + 4)->col = src_v1->col;
-    (dst + 4)->line_params = msh_vec4( 1.0, 1.0, line_width_b, line_length );
+    (dst + 4)->line_params = msh_vec4( -1.0, 1.0, line_width_b, line_length );
+
     (dst + 5)->clip_pos = clip_b1;
     (dst + 5)->col = src_v1->col;
-    (dst + 5)->line_params = msh_vec4( -1.0, 1.0, line_width_b, line_length );
+    (dst + 5)->line_params = msh_vec4( 1.0, 1.0, line_width_b, line_length );
 
     *quad_buf_len += 6;
     dst = quad_buf + (*quad_buf_len);
@@ -131,7 +135,6 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
       out vec3 v_col;
       out noperspective vec4 v_line_params;
 
-
       void main()
       {
         v_col = col;
@@ -157,7 +160,7 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
         float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / line_width),  1.0, abs(u) );
         float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / line_length), 1.0, abs(v) );
         frag_color = vec4( v_col, 1.0 );
-        frag_color.a *= min(av, au);
+        frag_color.a *= min( au, av );
       }
     );
 

@@ -89,8 +89,8 @@ geom_shdr_lines_init_device( void )
         vec2 dir = p_b - p_a;
 
         vec2 viewport_dir = dir * u_viewport_size;
-        float extension_length = (1.5 + u_aa_radius[1]);
-        float line_length = length( viewport_dir ) + 2*extension_length;
+        float extension_length = (1.5f + u_aa_radius[1]);
+        float line_length = length( viewport_dir ) + 2.0*extension_length;
       
         dir = normalize(vec2( dir.x, dir.y * u_aspect_ratio ));
 
