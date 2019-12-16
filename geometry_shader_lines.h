@@ -2,8 +2,8 @@
 #define GEOMETRY_SHADER_LINES_H
 
 void* geom_shdr_lines_init_device( void );
-uint32_t geom_shdr_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size );
-void geom_shdr_lines_render( const void* device, const int32_t count, const float* mvp, const float* viewport );
+uint32_t geom_shdr_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport );
+void geom_shdr_lines_render( const void* device, const int32_t count );
 void geom_shdr_lines_term_device( void** device );
 
 #endif /* GEOMETRY_SHADER_LINES_H */
@@ -29,6 +29,8 @@ typedef struct geom_shader_lines_device
   GLuint program_id;
   GLuint vao;
   GLuint vbo;
+  float* mvp;
+  float* viewport;
   geom_shader_lines_uniform_locations_t uniforms;
   geom_shader_lines_attrib_locations_t attribs;
 } geom_shader_lines_device_t;
@@ -226,22 +228,24 @@ geom_shdr_lines_term_device( void** device_in )
 }
 
 uint32_t
-geom_shdr_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size )
+geom_shdr_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport )
 {
   geom_shader_lines_device_t* device = device_in;
+  device->mvp = mvp;
+  device->viewport = viewport;
   glNamedBufferSubData( device->vbo, 0, n_elems*elem_size, data );
   return n_elems;
 }
 
 void
-geom_shdr_lines_render( const void* device_in, const int32_t count, const float* mvp, const float* viewport )
+geom_shdr_lines_render( const void* device_in, const int32_t count )
 {
   const geom_shader_lines_device_t* device = device_in;
   
   glUseProgram( device->program_id);
 
-  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, mvp );
-  glUniform2fv( device->uniforms.viewport_size, 1, viewport );
+  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->mvp );
+  glUniform2fv( device->uniforms.viewport_size, 1, device->viewport );
   glUniform2f( device->uniforms.aa_radius, 2.0f, 2.0f );
 
   glBindVertexArray( device->vao );
