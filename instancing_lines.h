@@ -18,9 +18,9 @@ typedef struct instancing_lines_device
   GLuint uniform_viewport_size_location;
   GLuint uniform_aa_radius_location;
   GLuint attrib_quad_pos_location;
-  GLuint attrib_pos_0_location;
+  GLuint attrib_pos_width_0_location;
   GLuint attrib_col_0_location;
-  GLuint attrib_pos_1_location;
+  GLuint attrib_pos_width_1_location;
   GLuint attrib_col_1_location;
   GLuint vao;
   GLuint line_vbo;
@@ -45,43 +45,72 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
       
       layout(location = 0) uniform mat4 u_mvp;
       layout(location = 1) uniform vec2 u_viewport_size;
+      layout(location = 2) uniform vec2 u_aa_radius;
 
       out vec3 v_col;
+      out noperspective float v_u;
+      out noperspective float v_v;
+      out noperspective float v_line_width;
+      out noperspective float v_line_length;
 
       void main()
       {
+        float u_width = u_viewport_size[0];
+        float u_height = u_viewport_size[1];
+        float u_aspect_ratio = u_height / u_width;
+
         vec3 colors[2] = vec3[2]( line_col_0, line_col_1 );
         v_col = colors[ int(quad_pos.x) ];
 
         vec4 clip_pos_0 = u_mvp * vec4( line_pos_width_0.xyz, 1.0f );
-        float line_width_0 = line_pos_width_0.w;
+        float line_width_0 = line_pos_width_0.w + u_aa_radius.x;
         
         vec4 clip_pos_1 = u_mvp * vec4( line_pos_width_1.xyz, 1.0f );
-        float line_width_1 = line_pos_width_1.w;
+        float line_width_1 = line_pos_width_1.w + u_aa_radius.x;
 
         vec2 ndc_pos_0 = clip_pos_0.xy / clip_pos_0.w;
         vec2 ndc_pos_1 = clip_pos_1.xy / clip_pos_1.w;
 
-        // TODO(maciej): Figure out this shader.
-        vec2 dir = ndc_pos_1 - ndc_pos_0;
-        vec2 viewport_dir = u_viewport_size * dir;
-        dir = normalize(dir);
-        vec2 normal = vec2(-dir.y, dir.x );
+        float extension_length = (1.5f + u_aa_radius.y);
+        vec2 line = ndc_pos_1 - ndc_pos_0;
+        vec2 dir = normalize( vec2( line.x, line.y * u_aspect_ratio ) );
+        vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2(-dir.y, dir.x );
+        vec2 normal_1 = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2(-dir.y, dir.x );
+        vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
+        
+        v_v = (1.0 - quad_pos.x) * (-1.0) + quad_pos.x * 1.0;
+        v_u = quad_pos.y;
+        v_line_width = (1.0 - quad_pos.x) * line_width_0 + quad_pos.x * line_width_1;
+        v_line_length = 0.5* (length( line * u_viewport_size ) + 2.0 * extension_length);
 
-        // vec3 pos = line_pos_0 + quad_pos.x * u + quad_pos.y * v * 0.01*line_width_0;
+        vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_0.zw + quad_pos.x * clip_pos_1.zw;
+        vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_0 + quad_pos.x * normal_1);
+        vec2 dir_x = quad_pos.x * line + v_v * extension;
 
-        gl_Position = vec4( (ndc_pos_0 + line_width_0 * normal) * clip_pos_0.w, clip_pos_0.zw);
+        gl_Position = vec4( (ndc_pos_0 + dir_x + dir_y) * zw_part.y, zw_part );
       }
     );
   
   const char* fs_src = 
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
+
+      layout(location = 2) uniform vec2 u_aa_radius;
+
       in vec3 v_col;
+      in noperspective float v_u;
+      in noperspective float v_v;
+      in noperspective float v_line_width;
+      in noperspective float v_line_length;
+
       out vec4 frag_color;
+      
       void main()
       {
+        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / v_line_width),  1.0, abs(v_u) );
+        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / v_line_length), 1.0, abs(v_v) );
         frag_color = vec4(v_col, 1.0);
+        frag_color.a *= min(av, au);
       }
     );
 
@@ -109,9 +138,9 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
   glDeleteShader( fragment_shader );
 
   device->attrib_quad_pos_location = glGetAttribLocation( device->program_id, "quad_pos" );
-  device->attrib_pos_0_location = glGetAttribLocation( device->program_id, "line_pos_width_0" );
+  device->attrib_pos_width_0_location = glGetAttribLocation( device->program_id, "line_pos_width_0" );
   device->attrib_col_0_location = glGetAttribLocation( device->program_id, "line_col_0" );
-  device->attrib_pos_1_location = glGetAttribLocation( device->program_id, "line_pos_width_1" );
+  device->attrib_pos_width_1_location = glGetAttribLocation( device->program_id, "line_pos_width_1" );
   device->attrib_col_1_location = glGetAttribLocation( device->program_id, "line_col_1" );
 
   device->uniform_mvp_location = glGetUniformLocation( device->program_id, "u_mvp" );
@@ -130,28 +159,29 @@ instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
   glVertexArrayVertexBuffer( device->vao, binding_idx, device->line_vbo, 0, 2 * sizeof(vertex_t) );
   glVertexArrayBindingDivisor( device->vao, binding_idx, 1 );
 
-  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_0_location );
+  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_width_0_location );
   glEnableVertexArrayAttrib( device->vao, device->attrib_col_0_location );
-  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_1_location );
+  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_width_1_location );
   glEnableVertexArrayAttrib( device->vao, device->attrib_col_1_location );
 
-  glVertexArrayAttribFormat( device->vao, device->attrib_pos_0_location, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_pos_width_0_location, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
   glVertexArrayAttribFormat( device->vao, device->attrib_col_0_location, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_pos_1_location, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, pos_width) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_pos_width_1_location, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, pos_width) );
   glVertexArrayAttribFormat( device->vao, device->attrib_col_1_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, col) );
 
-  glVertexArrayAttribBinding( device->vao, device->attrib_pos_0_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_pos_width_0_location, binding_idx );
   glVertexArrayAttribBinding( device->vao, device->attrib_col_0_location, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_pos_1_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_pos_width_1_location, binding_idx );
   glVertexArrayAttribBinding( device->vao, device->attrib_col_1_location, binding_idx );
 
 
   binding_idx++;
 
-  float quad[] = {  0.0, -0.5, 0.0,
-                    0.0,  0.5, 0.0,
-                    1.0,  0.5, 0.0,
-                    1.0, -0.5, 0.0  };
+  // Figure out this parametrization.
+  float quad[] = {  0.0, -1.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    1.0, 1.0, 0.0,
+                    1.0, -1.0, 0.0  };
   uint16_t ind[] = { 0, 1, 2,  0, 2, 3 };
   
 

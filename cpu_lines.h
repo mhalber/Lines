@@ -74,6 +74,7 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
     clip_b1 = msh_vec4( (ndc_b.x - normal_b.x) * clip_b0.w, (ndc_b.y - normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
     clip_b0 = msh_vec4( (ndc_b.x + normal_b.x) * clip_b0.w, (ndc_b.y + normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
 
+
     (dst + 0)->clip_pos = clip_a0;
     (dst + 0)->col = src_v0->col;
     (dst + 0)->line_params = msh_vec4( -1.0, -1.0, line_width_a, line_length );

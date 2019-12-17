@@ -229,7 +229,7 @@ main(int32_t argc, char **argv)
   uint32_t line_buf_len;
   vertex_t *line_buf = malloc(line_buf_cap * sizeof(vertex_t));
 
-  uint32_t active_idx = 4;
+  uint32_t active_idx = 2;
   line_draw_engine_t engines[5] = {0};
   setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render, &gl_lines_term_device );
   setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render, &cpu_lines_term_device );
