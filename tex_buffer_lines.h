@@ -62,52 +62,89 @@ tex_buffer_lines_init_device()
 
       // TODO(maciej): communicate vertex layout to vertex shader somehow.
 
-      out vec3 v_col;
+      out vec4 v_col;
+      out noperspective float v_u;
+      out noperspective float v_v;
+      out noperspective float v_line_width;
+      out noperspective float v_line_length;
 
       void main()
       {
-        float line_width = 0.01245f;
-        // Get ids of current and next vertex
+        // Get indices of current and next vertex
         // TODO(maciej): Double check the vertex addressing
         int line_id_0 = (gl_VertexID / 6) * 2;
         int line_id_1 = line_id_0 + 1;
-
+        int quad_id = gl_VertexID % 6;
+        ivec2 quad[6] = ivec2[6]( ivec2(0, -1), ivec2(0, 1), ivec2(1,  1),
+                                  ivec2(0, -1), ivec2(1, 1), ivec2(1, -1) );
+        
         // Sample data for this line segment
 #if USE_BINDLESS_TEXTURES
         samplerBuffer u_line_data_sampler = samplerBuffer( u_line_data_handle );
 #endif
-        vec3 points[2];
-        points[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 ).xyz;
-        points[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 ).xyz;
-        vec3 colors[2];
-        colors[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 + 1 ).rgb;
-        colors[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 + 1 ).rgb;
+        vec4 pos_width[2];
+        pos_width[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 );
+        pos_width[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 );
 
-        // Get vector normal to the line direction
-        vec3 dir = normalize( points[1] - points[0] );
-        vec3 normal = vec3( -dir.y, dir.x, dir.z );
+        vec4 color[2];
+        color[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 + 1 );
+        color[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 + 1 );
 
-        // Given local quad geo, select current vertex, and get some info for that particular vertex.
-        int quad_id = gl_VertexID % 6;
-        int pt_idx_lut[6] = int[6]( 0, 0, 1, 0, 1, 1 );
-        int orientation_lut[6] = int[6]( -1, 1, 1, -1, 1, -1 );
+        float u_width = u_viewport_size[0];
+        float u_height = u_viewport_size[1];
+        float u_aspect_ratio = u_height / u_width;
 
-        // Calculate the final position
-        vec3 position = points[ pt_idx_lut[quad_id] ] + line_width * orientation_lut[quad_id] * normal;
-        v_col = colors[pt_idx_lut[quad_id]];
-        gl_Position = u_mvp * vec4( position, 1.0 );
+        vec4 clip_pos_0 = u_mvp * vec4( pos_width[0].xyz, 1.0f );
+        float line_width_0 = pos_width[0].w + u_aa_radius.x;
 
+        vec4 clip_pos_1 = u_mvp * vec4( pos_width[1].xyz, 1.0f );
+        float line_width_1 = pos_width[1].w + u_aa_radius.x;
+
+        vec2 ndc_pos_0 = clip_pos_0.xy / clip_pos_0.w;
+        vec2 ndc_pos_1 = clip_pos_1.xy / clip_pos_1.w;
+
+        float extension_length = (1.5f + u_aa_radius.y);
+        vec2 line = ndc_pos_1 - ndc_pos_0;
+        vec2 dir = normalize( vec2( line.x, line.y * u_aspect_ratio ) );
+        vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2(-dir.y, dir.x );
+        vec2 normal_1 = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2(-dir.y, dir.x );
+        vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
+
+        ivec2 quad_pos = quad[quad_id];
+
+        v_v = 2.0 * quad_pos.x - 1.0;
+        v_u = quad_pos.y;
+        v_line_width = (1.0 - quad_pos.x) * line_width_0 + quad_pos.x * line_width_1;
+        v_line_length = 0.5* (length( line * u_viewport_size ) + 2.0 * extension_length);
+
+        vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_0.zw + quad_pos.x * clip_pos_1.zw;
+        vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_0 + quad_pos.x * normal_1);
+        vec2 dir_x = quad_pos.x * line + v_v * extension;
+
+        v_col = color[ quad_pos.x ];
+        gl_Position = vec4( (ndc_pos_0 + dir_x + dir_y) * zw_part.y, zw_part );
       }
     );
   
   const char* fs_src =
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
-      in vec3 v_col;
+
+      layout(location = 2) uniform vec2 u_aa_radius;
+
+      in vec4 v_col;
+      in noperspective float v_u;
+      in noperspective float v_v;
+      in noperspective float v_line_width;
+      in noperspective float v_line_length;
+
       out vec4 frag_color;
       void main()
       {
-        frag_color = vec4(v_col, 1.0);
+        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / v_line_width),  1.0, abs(v_u) );
+        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / v_line_length), 1.0, abs(v_v) );
+        frag_color = v_col;
+        frag_color.a *= min(av, au);
       }
     );
 
