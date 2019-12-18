@@ -17,13 +17,13 @@ void cpu_lines_term_device( void** device );
 typedef struct cpu_lines_vertex
 {
   msh_vec4_t clip_pos;
-  msh_vec3_t col;
+  msh_vec4_t col;
   msh_vec4_t line_params;
 } cpu_lines_vertex_t;
 
 void
 cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
-                 cpu_lines_vertex_t* quad_buf, uint32_t *quad_buf_len, uint32_t quad_buf_cap,
+                  cpu_lines_vertex_t* quad_buf, uint32_t *quad_buf_len, uint32_t quad_buf_cap,
                   msh_mat4_t mvp, msh_vec2_t viewport_size )
 {
   if( line_buf_len * 3 >= quad_buf_cap )
@@ -130,10 +130,10 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
       layout(location = 0) in vec4 clip_pos;
-      layout(location = 1) in vec3 col;
+      layout(location = 1) in vec4 col;
       layout(location = 2) in vec4 line_params;
 
-      out vec3 v_col;
+      out vec4 v_col;
       out noperspective vec4 v_line_params;
 
       void main()
@@ -148,7 +148,7 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
       layout(location = 0) uniform vec2 u_aa_radius;
-      in vec3 v_col;
+      in vec4 v_col;
       in noperspective vec4 v_line_params;
       out vec4 frag_color;
       void main()
@@ -160,7 +160,7 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
 
         float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / line_width),  1.0, abs(u) );
         float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / line_length), 1.0, abs(v) );
-        frag_color = vec4( v_col, 1.0 );
+        frag_color = v_col;
         frag_color.a *= min( au, av );
       }
     );

@@ -37,7 +37,7 @@ typedef struct vertex
     struct { msh_vec3_t pos; float width; };
     msh_vec4_t pos_width;
   };
-  msh_vec3_t col;
+  msh_vec4_t col;
 } vertex_t;
 
 #define GL_LINES_IMPLEMENTATION
@@ -154,8 +154,8 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
     float line_width = 0.5;
     for( float f = -3.6; f < 0.6 + 0.1; f+= 0.3 )
     {
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.2, -1.0, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.2,  1.0, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.2, -1.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.2,  1.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
       line_width += 0.5;
     }
@@ -174,8 +174,8 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
       float x2 = cx + radius2 * sin(i * d_theta);
       float y2 = cy + radius2 * cos(i * d_theta);
 
-      *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec3_zeros() };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
     }
 
@@ -229,13 +229,13 @@ main(int32_t argc, char **argv)
   uint32_t line_buf_len;
   vertex_t *line_buf = malloc(line_buf_cap * sizeof(vertex_t));
 
-  uint32_t active_idx = 2;
+  uint32_t active_idx = 0;
   line_draw_engine_t engines[5] = {0};
   setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render, &gl_lines_term_device );
-  setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render, &cpu_lines_term_device );
-  setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render, &geom_shdr_lines_term_device );
-  // setup(engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render);
-  setup(engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render, &instancing_lines_term_device);
+  // setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render, &cpu_lines_term_device );
+  // setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render, &geom_shdr_lines_term_device );
+  // setup(engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render, &tex_buffer_lines_term_device );
+  // setup(engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render, &instancing_lines_term_device);
 
   msh_camera_t cam = {0};
   msh_camera_init(&cam, &(msh_camera_desc_t){.eye = msh_vec3( 0.0f, 0.0f, 6.0f ),

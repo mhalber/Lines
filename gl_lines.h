@@ -44,11 +44,11 @@ gl_lines_init_device( void )
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
       layout(location = 0) in vec4 pos_width;
-      layout(location = 1) in vec3 col;
+      layout(location = 1) in vec4 col;
       
       layout(location = 0) uniform mat4 u_mvp;
 
-      out vec3 v_col;
+      out vec4 v_col;
 
       void main()
       {
@@ -60,11 +60,11 @@ gl_lines_init_device( void )
   const char* fs_src = 
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
-      in vec3 v_col;
+      in vec4 v_col;
       out vec4 frag_color;
       void main()
       {
-        frag_color = vec4( v_col, 1.0 );
+        frag_color = v_col;
       }
     );
 
@@ -105,8 +105,8 @@ gl_lines_init_device( void )
   glEnableVertexArrayAttrib( device->vao, device->attribs.pos_width );
   glEnableVertexArrayAttrib( device->vao, device->attribs.col );
 
-  glVertexArrayAttribFormat( device->vao, device->attribs.pos_width, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos) );
-  glVertexArrayAttribFormat( device->vao, device->attribs.col, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.pos_width, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.col, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
 
   glVertexArrayAttribBinding( device->vao, device->attribs.pos_width, binding_idx );
   glVertexArrayAttribBinding( device->vao, device->attribs.col, binding_idx );  
@@ -140,14 +140,31 @@ gl_lines_render( const void* device_in, const int32_t count )
 {
   const gl_lines_device_t* device = device_in;
 
+  glEnable(GL_LINE_SMOOTH );
   glUseProgram( device->program_id );
   glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->mvp );
 
   glBindVertexArray( device->vao );
-  glDrawArrays( GL_LINES, 0, count );
+  
+  float line_width = 0.5f;
+  int32_t offset = 0;
+  // Lines
+  for( int i = 0; i < 15 ; ++i )
+  {
+    glLineWidth( line_width );
+    glDrawArrays( GL_LINES, offset, 2 );
+    offset += 2;
+    line_width += 0.5f;
+  }
+  // circle
+  glLineWidth( 1.0f );
+  glDrawArrays( GL_LINES, offset, count-offset );
 
+  glLineWidth(1.0f);
   glBindVertexArray( 0 );
   glUseProgram( 0 );
+  
+  glDisable( GL_LINE_SMOOTH );
 }
 
 #endif /*GL_LINES_IMPLEMENTATION*/

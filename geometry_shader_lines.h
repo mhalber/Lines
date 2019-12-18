@@ -44,11 +44,11 @@ geom_shdr_lines_init_device( void )
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
       layout(location = 0) in vec4 pos_width;
-      layout(location = 1) in vec3 col;
+      layout(location = 1) in vec4 col;
 
       layout(location = 0) uniform mat4 u_mvp;
       
-      out vec3 v_col;
+      out vec4 v_col;
       out noperspective float v_line_width;
 
       void main()
@@ -68,7 +68,7 @@ geom_shdr_lines_init_device( void )
       layout(location = 1) uniform vec2 u_viewport_size;
       layout(location = 2) uniform vec2 u_aa_radius;
 
-      in vec3 v_col[];
+      in vec4 v_col[];
       in noperspective float v_line_width[];
 
       out vec4 g_col;
@@ -100,7 +100,7 @@ geom_shdr_lines_init_device( void )
         vec2 normal_b  = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2( -dir.y, dir.x );
         vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
 
-        g_col = vec4( v_col[0], 1.0f );//smoothstep(0.0, 1.0, v_line_width[0] / u_aa_radius[0] ));
+        g_col = v_col[0];//smoothstep(0.0, 1.0, v_line_width[0] / u_aa_radius[0] ));
         g_u = 1.0;
         g_v = 1.0;
         g_line_width = line_width_0;
@@ -115,7 +115,7 @@ geom_shdr_lines_init_device( void )
         gl_Position = vec4( (p_a - normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
         
-        g_col = vec4( v_col[1], 1.0f );//smoothstep(0.0, 1.0, v_line_width[1] / u_aa_radius[1] ));
+        g_col = v_col[1];//smoothstep(0.0, 1.0, v_line_width[1] / u_aa_radius[1] ));
         g_u = 1.0;
         g_v = -1.0;
         g_line_width = line_width_1;
@@ -209,7 +209,7 @@ geom_shdr_lines_init_device( void )
   glEnableVertexArrayAttrib( device->vao, device->attribs.col );
 
   glVertexArrayAttribFormat( device->vao, device->attribs.pos_width, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
-  glVertexArrayAttribFormat( device->vao, device->attribs.col, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.col, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
 
   glVertexArrayAttribBinding( device->vao, device->attribs.pos_width, binding_idx );
   glVertexArrayAttribBinding( device->vao, device->attribs.col, binding_idx );

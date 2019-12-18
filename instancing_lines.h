@@ -39,15 +39,15 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
     GL_UTILS_SHDR_SOURCE(
       layout(location = 0) in vec3 quad_pos;
       layout(location = 1) in vec4 line_pos_width_0;
-      layout(location = 2) in vec3 line_col_0;
+      layout(location = 2) in vec4 line_col_0;
       layout(location = 3) in vec4 line_pos_width_1;
-      layout(location = 4) in vec3 line_col_1;
+      layout(location = 4) in vec4 line_col_1;
       
       layout(location = 0) uniform mat4 u_mvp;
       layout(location = 1) uniform vec2 u_viewport_size;
       layout(location = 2) uniform vec2 u_aa_radius;
 
-      out vec3 v_col;
+      out vec4 v_col;
       out noperspective float v_u;
       out noperspective float v_v;
       out noperspective float v_line_width;
@@ -59,7 +59,7 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
         float u_height = u_viewport_size[1];
         float u_aspect_ratio = u_height / u_width;
 
-        vec3 colors[2] = vec3[2]( line_col_0, line_col_1 );
+        vec4 colors[2] = vec4[2]( line_col_0, line_col_1 );
         v_col = colors[ int(quad_pos.x) ];
 
         vec4 clip_pos_0 = u_mvp * vec4( line_pos_width_0.xyz, 1.0f );
@@ -97,7 +97,7 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
 
       layout(location = 2) uniform vec2 u_aa_radius;
 
-      in vec3 v_col;
+      in vec4 v_col;
       in noperspective float v_u;
       in noperspective float v_v;
       in noperspective float v_line_width;
@@ -109,7 +109,7 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
       {
         float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / v_line_width),  1.0, abs(v_u) );
         float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / v_line_length), 1.0, abs(v_v) );
-        frag_color = vec4(v_col, 1.0);
+        frag_color = v_col;
         frag_color.a *= min(av, au);
       }
     );
@@ -165,9 +165,9 @@ instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
   glEnableVertexArrayAttrib( device->vao, device->attrib_col_1_location );
 
   glVertexArrayAttribFormat( device->vao, device->attrib_pos_width_0_location, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_col_0_location, 3, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_col_0_location, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
   glVertexArrayAttribFormat( device->vao, device->attrib_pos_width_1_location, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, pos_width) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_col_1_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_col_1_location, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, col) );
 
   glVertexArrayAttribBinding( device->vao, device->attrib_pos_width_0_location, binding_idx );
   glVertexArrayAttribBinding( device->vao, device->attrib_col_0_location, binding_idx );
