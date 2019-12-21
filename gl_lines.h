@@ -13,27 +13,27 @@ void gl_lines_term_device( void** device );
 
 #ifdef GL_LINES_IMPLEMENTATION
 
-typedef struct gl_lines_uniform_locations
-{
-  GLuint mvp;
-} gl_lines_uniform_locations_t;
-
-typedef struct gl_lines_attrib_locations
-{
-  GLuint pos_width;
-  GLuint col;
-} gl_lines_attrib_locations_t;
-
 typedef struct gl_lines_device
 {
   GLuint program_id;
   GLuint vao;
   GLuint vbo;
+
+  struct gl_lines_uniform_locations
+  {
+    GLuint mvp;
+  } uniforms;
+
+  struct gl_lines_attrib_locations
+  {
+    GLuint pos_width;
+    GLuint col;
+  } attribs;
+
   uniform_data_t* uniform_data;
   vertex_t* vertex_data;
   int32_t vertex_data_len;
-  gl_lines_uniform_locations_t uniforms;
-  gl_lines_attrib_locations_t attribs;
+
 } gl_lines_device_t;
 
 void*

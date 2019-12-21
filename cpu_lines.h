@@ -124,26 +124,23 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
   }
 }
 
-typedef struct cpu_lines_uniforms_locations
-{
-  GLuint aa_radius;
-} cpu_lines_uniform_locations_t;
-
-typedef struct cpu_lines_attrib_locations
-{
-  GLuint clip_pos;
-  GLuint col;
-  GLuint line_params;
-} cpu_lines_attrib_locations_t;
-
 typedef struct cpu_lines_device
 {
   GLuint program_id;
-  cpu_lines_uniform_locations_t uniforms;
-  cpu_lines_attrib_locations_t attribs;
-
   GLuint vao;
   GLuint vbo;
+
+  struct cpu_lines_uniforms_locations
+  {
+    GLuint aa_radius;
+  } uniforms;
+  
+  struct cpu_lines_attrib_locations
+  {
+    GLuint clip_pos;
+    GLuint col;
+    GLuint line_params;
+  } attribs;
 
   cpu_lines_vertex_t* quad_buf;
   uniform_data_t* uniform_data;

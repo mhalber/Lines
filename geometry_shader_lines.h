@@ -12,27 +12,26 @@ void geom_shdr_lines_term_device( void** device );
 
 #ifdef GEOMETRY_SHADER_LINES_IMPLEMENTATION
 
-typedef struct geom_shader_lines_uniform_locations
-{
-  GLuint mvp;
-  GLuint viewport_size;
-  GLuint aa_radius;
-} geom_shader_lines_uniform_locations_t;
-
-typedef struct geom_shader_lines_attrib_locations
-{
-  GLuint pos_width;
-  GLuint col;
-} geom_shader_lines_attrib_locations_t;
-
 typedef struct geom_shader_lines_device
 {
   GLuint program_id;
   GLuint vao;
   GLuint vbo;
+
+  struct geom_shader_lines_uniform_locations
+  {
+    GLuint mvp;
+    GLuint viewport_size;
+    GLuint aa_radius;
+  } uniforms;
+  
+  struct geom_shader_lines_attrib_locations
+  {
+    GLuint pos_width;
+    GLuint col;
+  } attribs;
+  
   uniform_data_t* uniform_data;
-  geom_shader_lines_uniform_locations_t uniforms;
-  geom_shader_lines_attrib_locations_t attribs;
 } geom_shader_lines_device_t;
 
 void*
@@ -79,37 +78,38 @@ geom_shdr_lines_init_device( void )
 
       void main()
       {
-        float u_width = u_viewport_size[0];
-        float u_height = u_viewport_size[1];
+        float u_width        = u_viewport_size[0];
+        float u_height       = u_viewport_size[1];
         float u_aspect_ratio = u_height / u_width;
 
         vec2 ndc_a = gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w;
         vec2 ndc_b = gl_in[1].gl_Position.xy / gl_in[1].gl_Position.w;
 
-        vec2 dir = ndc_b - ndc_a;
-        vec2 viewport_line = dir * u_viewport_size;
-        dir = normalize(vec2( dir.x, dir.y * u_aspect_ratio ));
+        vec2 line_vector = ndc_b - ndc_a;
+        vec2 viewport_line_vector = line_vector * u_viewport_size;
+        vec2 dir = normalize(vec2( line_vector.x, line_vector.y * u_aspect_ratio ));
 
-        float line_width_0 = max( 1.0, v_line_width[0] ) + u_aa_radius[0];
-        float line_width_1 = max( 1.0, v_line_width[1] ) + u_aa_radius[0];
-        float extension_length = (u_aa_radius[1]);
-        float line_length = length( viewport_line ) + 2.0 * extension_length;
+        float line_width_a     = max( 1.0, v_line_width[0] ) + u_aa_radius[0];
+        float line_width_b     = max( 1.0, v_line_width[1] ) + u_aa_radius[0];
+        float extension_length = u_aa_radius[1];
+        float line_length      = length( viewport_line_vector ) + 2.0 * extension_length;
         
-        vec2 normal_a  = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2( -dir.y, dir.x );
-        vec2 normal_b  = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2( -dir.y, dir.x );
+        vec2 normal    = vec2( -dir.y, dir.x );
+        vec2 normal_a  = vec2( line_width_a/u_width, line_width_a/u_height ) * normal;
+        vec2 normal_b  = vec2( line_width_b/u_width, line_width_b/u_height ) * normal;
         vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
 
         g_col = vec4( v_col[0].rgb, v_col[0].a * min( v_line_width[0], 1.0f ) );
         g_u = 1.0;
         g_v = 1.0;
-        g_line_width = line_width_0;
+        g_line_width = line_width_a;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_a + normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
         
         g_u = -1.0;
         g_v = 1.0;
-        g_line_width = line_width_0;
+        g_line_width = line_width_a;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_a - normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
@@ -117,14 +117,14 @@ geom_shdr_lines_init_device( void )
         g_col = vec4( v_col[0].rgb, v_col[0].a * min( v_line_width[0], 1.0f ) );
         g_u = 1.0;
         g_v = -1.0;
-        g_line_width = line_width_1;
+        g_line_width = line_width_b;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_b + normal_b + extension) * gl_in[1].gl_Position.w, gl_in[1].gl_Position.zw );
         EmitVertex();
         
         g_u = -1.0;
         g_v = -1.0;
-        g_line_width = line_width_1;
+        g_line_width = line_width_b;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_b - normal_b + extension) * gl_in[1].gl_Position.w, gl_in[1].gl_Position.zw );
         EmitVertex();

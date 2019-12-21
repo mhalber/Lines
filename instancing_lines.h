@@ -11,22 +11,6 @@ void instancing_lines_term_device( void** );
 
 #ifdef INSTANCING_LINES_IMPLEMENTATION
 
-typedef struct instancing_lines_uniforms_locations
-{
-  GLuint mvp;
-  GLuint viewport_size;
-  GLuint aa_radius;
-} instancing_lines_uniforms_locations_t;
-
-typedef struct instancing_lines_attrib_locations
-{
-  GLuint quad_pos;
-  GLuint pos_width_0;
-  GLuint col_0;
-  GLuint pos_width_1;
-  GLuint col_1;
-} instancing_lines_attrib_locations_t;
-
 typedef struct instancing_lines_device
 {
   GLuint program_id;
@@ -34,8 +18,23 @@ typedef struct instancing_lines_device
   GLuint line_vbo;
   GLuint quad_vbo;
   GLuint quad_ebo;
-  instancing_lines_uniforms_locations_t uniforms;
-  instancing_lines_attrib_locations_t attribs;
+
+  struct instancing_lines_uniforms_locations
+  {
+    GLuint mvp;
+    GLuint viewport_size;
+    GLuint aa_radius;
+  } uniforms;
+
+  struct instancing_lines_attrib_locations
+  {
+    GLuint quad_pos;
+    GLuint pos_width_0;
+    GLuint col_0;
+    GLuint pos_width_1;
+    GLuint col_1;
+  } attribs;
+
   uniform_data_t* uniform_data;
 } instancing_lines_device_t;
 
@@ -46,10 +45,10 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
     GL_UTILS_SHDR_VERSION
     GL_UTILS_SHDR_SOURCE(
       layout(location = 0) in vec3 quad_pos;
-      layout(location = 1) in vec4 line_pos_width_0;
-      layout(location = 2) in vec4 line_col_0;
-      layout(location = 3) in vec4 line_pos_width_1;
-      layout(location = 4) in vec4 line_col_1;
+      layout(location = 1) in vec4 line_pos_width_a;
+      layout(location = 2) in vec4 line_col_a;
+      layout(location = 3) in vec4 line_pos_width_b;
+      layout(location = 4) in vec4 line_col_b;
       
       layout(location = 0) uniform mat4 u_mvp;
       layout(location = 1) uniform vec2 u_viewport_size;
@@ -63,39 +62,43 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
 
       void main()
       {
-        float u_width = u_viewport_size[0];
-        float u_height = u_viewport_size[1];
+        float u_width        = u_viewport_size[0];
+        float u_height       = u_viewport_size[1];
         float u_aspect_ratio = u_height / u_width;
 
-        vec4 colors[2] = vec4[2]( line_col_0, line_col_1 );
-        colors[0].a *= min( 1.0, line_pos_width_0.w );
-        colors[1].a *= min( 1.0, line_pos_width_1.w );
+        vec4 colors[2] = vec4[2]( line_col_a, line_col_b );
+        colors[0].a *= min( 1.0, line_pos_width_a.w );
+        colors[1].a *= min( 1.0, line_pos_width_b.w );
         v_col = colors[ int(quad_pos.x) ];
 
-        vec4 clip_pos_0 = u_mvp * vec4( line_pos_width_0.xyz, 1.0f );
-        float line_width_0 = max( 1.0, line_pos_width_0.w) + u_aa_radius.x;
-        
-        vec4 clip_pos_1 = u_mvp * vec4( line_pos_width_1.xyz, 1.0f );
-        float line_width_1 = max( 1.0, line_pos_width_1.w) + u_aa_radius.x;
+        vec4 clip_pos_a = u_mvp * vec4( line_pos_width_a.xyz, 1.0f );
+        vec4 clip_pos_b = u_mvp * vec4( line_pos_width_b.xyz, 1.0f );
 
-        vec2 ndc_pos_0 = clip_pos_0.xy / clip_pos_0.w;
-        vec2 ndc_pos_1 = clip_pos_1.xy / clip_pos_1.w;
+        vec2 ndc_pos_0 = clip_pos_a.xy / clip_pos_a.w;
+        vec2 ndc_pos_1 = clip_pos_b.xy / clip_pos_b.w;
 
-        float extension_length = (u_aa_radius.y);
-        vec2 line = ndc_pos_1 - ndc_pos_0;
-        vec2 dir = normalize( vec2( line.x, line.y * u_aspect_ratio ) );
-        vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2(-dir.y, dir.x );
-        vec2 normal_1 = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2(-dir.y, dir.x );
-        vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
-        
-        v_v = (1.0 - quad_pos.x) * (-1.0) + quad_pos.x * 1.0;
+        vec2 line_vector          = ndc_pos_1 - ndc_pos_0;
+        vec2 viewport_line_vector = line_vector * u_viewport_size;
+        vec2 dir                  = normalize( vec2( line_vector.x, line_vector.y * u_aspect_ratio ) );
+
+        float extension_length = u_aa_radius.y;
+        float line_length      = length( line_vector * u_viewport_size ) + 2.0 * extension_length;
+        float line_width_a     = max( 1.0, line_pos_width_a.w ) + u_aa_radius.x;
+        float line_width_b     = max( 1.0, line_pos_width_b.w ) + u_aa_radius.x;
+
+        vec2 normal      = vec2( -dir.y, dir.x );
+        vec2 normal_a    = vec2( line_width_a / u_width, line_width_a / u_height ) * normal;
+        vec2 normal_b    = vec2( line_width_b / u_width, line_width_b / u_height ) * normal;
+        vec2 extension   = vec2( extension_length / u_width, extension_length / u_height ) * dir;
+
+        v_v = 2.0 * quad_pos.x - 1.0;
         v_u = quad_pos.y;
-        v_line_width = (1.0 - quad_pos.x) * line_width_0 + quad_pos.x * line_width_1;
-        v_line_length = 0.5* (length( line * u_viewport_size ) + 2.0 * extension_length);
+        v_line_width = (1.0 - quad_pos.x) * line_width_a + quad_pos.x * line_width_b;
+        v_line_length = 0.5 * line_length;
 
-        vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_0.zw + quad_pos.x * clip_pos_1.zw;
-        vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_0 + quad_pos.x * normal_1);
-        vec2 dir_x = quad_pos.x * line + v_v * extension;
+        vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_a.zw + quad_pos.x * clip_pos_b.zw;
+        vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_a + quad_pos.x * normal_b);
+        vec2 dir_x = quad_pos.x * line_vector + v_v * extension;
 
         gl_Position = vec4( (ndc_pos_0 + dir_x + dir_y) * zw_part.y, zw_part );
       }
@@ -148,10 +151,10 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
   glDeleteShader( fragment_shader );
 
   device->attribs.quad_pos    = glGetAttribLocation( device->program_id, "quad_pos" );
-  device->attribs.pos_width_0 = glGetAttribLocation( device->program_id, "line_pos_width_0" );
-  device->attribs.col_0       = glGetAttribLocation( device->program_id, "line_col_0" );
-  device->attribs.pos_width_1 = glGetAttribLocation( device->program_id, "line_pos_width_1" );
-  device->attribs.col_1       = glGetAttribLocation( device->program_id, "line_col_1" );
+  device->attribs.pos_width_0 = glGetAttribLocation( device->program_id, "line_pos_width_a" );
+  device->attribs.col_0       = glGetAttribLocation( device->program_id, "line_col_a" );
+  device->attribs.pos_width_1 = glGetAttribLocation( device->program_id, "line_pos_width_b" );
+  device->attribs.col_1       = glGetAttribLocation( device->program_id, "line_col_b" );
 
   device->uniforms.mvp           = glGetUniformLocation( device->program_id, "u_mvp" );
   device->uniforms.aa_radius     = glGetUniformLocation( device->program_id, "u_aa_radius" );

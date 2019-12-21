@@ -13,33 +13,27 @@ void tex_buffer_lines_term_device( void** );
 
 #define USE_BINDLESS_TEXTURES 0
 
-typedef struct tex_buffer_lines_uniform_locations
-{
-  GLuint mvp;
-  GLuint viewport_size;
-  GLuint aa_radius;
-
-#if USE_BINDLESS_TEXTURES
-  GLuint line_data_handle;
-#else
-  GLuint line_data_sampler;
-#endif
-} tex_buffer_lines_uniform_locations_t;
-
 typedef struct tex_buffer_lines_device
 {
-  uniform_data_t* uniform_data;
   GLuint program_id;
   GLuint vao;
   GLuint line_data_buffer;
   GLuint line_data_texture_id;
 
-  tex_buffer_lines_uniform_locations_t uniforms;
-  struct anonymous_data
+  struct tex_buffer_lines_uniform_locations
   {
-    int32_t this_is_data;
-  } anonymous;
+    GLuint mvp;
+    GLuint viewport_size;
+    GLuint aa_radius;
 
+  #if USE_BINDLESS_TEXTURES
+    GLuint line_data_handle;
+  #else
+    GLuint line_data_sampler;
+  #endif
+  } uniforms;
+
+  uniform_data_t* uniform_data;
 #if USE_BINDLESS_TEXTURES
   GLuint64 line_data_texture_handle;
 #endif
@@ -79,6 +73,10 @@ tex_buffer_lines_init_device()
 
       void main()
       {
+        float u_width = u_viewport_size[0];
+        float u_height = u_viewport_size[1];
+        float u_aspect_ratio = u_height / u_width;
+
         // Get indices of current and next vertex
         // TODO(maciej): Double check the vertex addressing
         int line_id_0 = (gl_VertexID / 6) * 2;
@@ -99,40 +97,41 @@ tex_buffer_lines_init_device()
         color[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 + 1 );
         color[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 + 1 );
 
-        float u_width = u_viewport_size[0];
-        float u_height = u_viewport_size[1];
-        float u_aspect_ratio = u_height / u_width;
+        vec4 clip_pos_a = u_mvp * vec4( pos_width[0].xyz, 1.0 );
+        vec4 clip_pos_b = u_mvp * vec4( pos_width[1].xyz, 1.0 );
 
-        vec4 clip_pos_0 = u_mvp * vec4( pos_width[0].xyz, 1.0 );
-        float line_width_0 = max( pos_width[0].w, 1.0 ) + u_aa_radius.x;
+        vec2 ndc_pos_a = clip_pos_a.xy / clip_pos_a.w;
+        vec2 ndc_pos_b = clip_pos_b.xy / clip_pos_b.w;
 
-        vec4 clip_pos_1 = u_mvp * vec4( pos_width[1].xyz, 1.0 );
-        float line_width_1 = max( pos_width[1].w, 1.0 ) + u_aa_radius.x;
-
-        vec2 ndc_pos_0 = clip_pos_0.xy / clip_pos_0.w;
-        vec2 ndc_pos_1 = clip_pos_1.xy / clip_pos_1.w;
+        vec2 line_vector          = ndc_pos_b - ndc_pos_a;
+        vec2 viewport_line_vector = line_vector * u_viewport_size;
+        vec2 dir                  = normalize( vec2( line_vector.x, line_vector.y * u_aspect_ratio ) );
 
         float extension_length = (u_aa_radius.y);
-        vec2 line = ndc_pos_1 - ndc_pos_0;
-        vec2 dir = normalize( vec2( line.x, line.y * u_aspect_ratio ) );
-        vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2( -dir.y, dir.x );
-        vec2 normal_1 = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2( -dir.y, dir.x );
+        float line_length      = length( viewport_line_vector ) + 2.0 * extension_length;
+        float line_width_a     = max( pos_width[0].w, 1.0 ) + u_aa_radius.x;
+        float line_width_b     = max( pos_width[1].w, 1.0 ) + u_aa_radius.x;
+
+        vec2 normal    = vec2( -dir.y, dir.x );
+        vec2 normal_a  = vec2( line_width_a / u_width, line_width_a / u_height ) * normal;
+        vec2 normal_b  = vec2( line_width_b / u_width, line_width_b / u_height ) * normal;
         vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
 
-        ivec2 quad_pos = quad[quad_id];
+        ivec2 quad_pos = quad[ quad_id ];
 
         v_v = 2.0 * quad_pos.x - 1.0;
         v_u = quad_pos.y;
-        v_line_width = (1.0 - quad_pos.x) * line_width_0 + quad_pos.x * line_width_1;
-        v_line_length = 0.5* (length( line * u_viewport_size ) + 2.0 * extension_length);
+        v_line_width = (1.0 - quad_pos.x) * line_width_a + quad_pos.x * line_width_b;
+        v_line_length = 0.5 * line_length;
 
-        vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_0.zw + quad_pos.x * clip_pos_1.zw;
-        vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_0 + quad_pos.x * normal_1);
-        vec2 dir_x = quad_pos.x * line + v_v * extension;
+        vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_a.zw + quad_pos.x * clip_pos_b.zw;
+        vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_a + quad_pos.x * normal_b);
+        vec2 dir_x = quad_pos.x * line_vector + v_v * extension;
 
         v_col = color[ quad_pos.x ];
         v_col.a = min( pos_width[quad_pos.x].w * v_col.a, 1.0f );
-        gl_Position = vec4( (ndc_pos_0 + dir_x + dir_y) * zw_part.y, zw_part );
+
+        gl_Position = vec4( (ndc_pos_a + dir_x + dir_y) * zw_part.y, zw_part );
       }
     );
   
