@@ -39,7 +39,6 @@ typedef struct tex_buffer_lines_device
 #endif
 } tex_buffer_lines_device_t;
 
-
 void*
 tex_buffer_lines_init_device()
 {
