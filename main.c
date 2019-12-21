@@ -85,7 +85,7 @@ void terminate( line_draw_engine_t* engine )
 
 void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf_cap )
 {
-  #if 1
+  #if 0
   vertex_t *dst1 = line_buf;
   vertex_t *dst2 = line_buf + 1;
 

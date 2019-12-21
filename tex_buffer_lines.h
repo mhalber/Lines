@@ -13,24 +13,36 @@ void tex_buffer_lines_term_device( void** );
 
 #define USE_BINDLESS_TEXTURES 0
 
+typedef struct tex_buffer_lines_uniform_locations
+{
+  GLuint mvp;
+  GLuint viewport_size;
+  GLuint aa_radius;
+
+#if USE_BINDLESS_TEXTURES
+  GLuint line_data_handle;
+#else
+  GLuint line_data_sampler;
+#endif
+} tex_buffer_lines_uniform_locations_t;
+
 typedef struct tex_buffer_lines_device
 {
+  uniform_data_t* uniform_data;
   GLuint program_id;
-  GLuint uniform_mvp_location;
-  GLuint uniform_viewport_size_location;
-  GLuint uniform_aa_radius_location;
-
-  GLuint uniform_line_data_sampler_location;
   GLuint vao;
-
   GLuint line_data_buffer;
   GLuint line_data_texture_id;
 
-  //Optional: Bindless
-  GLuint64 line_data_texture_handle;
-  GLuint uniform_line_data_handle_location;
+  tex_buffer_lines_uniform_locations_t uniforms;
+  struct anonymous_data
+  {
+    int32_t this_is_data;
+  } anonymous;
 
-  uniform_data_t* uniform_data;
+#if USE_BINDLESS_TEXTURES
+  GLuint64 line_data_texture_handle;
+#endif
 } tex_buffer_lines_device_t;
 
 
@@ -168,14 +180,14 @@ tex_buffer_lines_init_device()
   glDeleteShader( vertex_shader );
   glDeleteShader( fragment_shader );
 
-  device->uniform_mvp_location = glGetUniformLocation( device->program_id, "u_mvp" );
-  device->uniform_viewport_size_location = glGetUniformLocation( device->program_id, "u_viewport_size" );
-  device->uniform_aa_radius_location = glGetUniformLocation( device->program_id, "u_aa_radius" );
+  device->uniforms.mvp           = glGetUniformLocation( device->program_id, "u_mvp" );
+  device->uniforms.viewport_size = glGetUniformLocation( device->program_id, "u_viewport_size" );
+  device->uniforms.aa_radius     = glGetUniformLocation( device->program_id, "u_aa_radius" );
 
 #if USE_BINDLESS_TEXTURES
-  device->uniform_line_data_handle_location = glGetUniformLocation( device->program_id, "u_line_data_handle");
+  device->uniforms.line_data_handle  = glGetUniformLocation( device->program_id, "u_line_data_handle");
 #else
-  device->uniform_line_data_sampler_location = glGetUniformLocation( device->program_id, "u_line_data_sampler");
+  device->uniforms.line_data_sampler = glGetUniformLocation( device->program_id, "u_line_data_sampler");
 #endif
   
   glCreateVertexArrays( 1, &device->vao );
@@ -223,16 +235,16 @@ tex_buffer_lines_render( const void* device_in, const int32_t count )
   const tex_buffer_lines_device_t* device = device_in;
   glUseProgram( device->program_id );
 
-  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->uniform_data->mvp );
-  glUniform2fv( device->uniform_viewport_size_location, 1, device->uniform_data->viewport );
-  glUniform2fv( device->uniform_aa_radius_location, 1, device->uniform_data->aa_radius );
+  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->uniform_data->mvp );
+  glUniform2fv( device->uniforms.viewport_size, 1, device->uniform_data->viewport );
+  glUniform2fv( device->uniforms.aa_radius, 1, device->uniform_data->aa_radius );
 
 #if USE_BINDLESS_TEXTURES
-  glUniformHandleui64ARB( device->uniform_line_data_handle_location, device->line_data_texture_handle );
+  glUniformHandleui64ARB( device->uniforms.line_data_handle, device->line_data_texture_handle );
 #else
   glActiveTexture( GL_TEXTURE0 );
   glBindTexture( GL_TEXTURE_BUFFER, device->line_data_texture_id );
-  glUniform1i( device->uniform_line_data_sampler_location, 0 );
+  glUniform1i( device->uniforms.line_data_sampler, 0 );
 #endif
 
   glBindVertexArray( device->vao );

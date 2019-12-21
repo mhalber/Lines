@@ -124,20 +124,24 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
   }
 }
 
-typedef struct cpu_lines_uniform_locations
+typedef struct cpu_lines_uniforms_locations
 {
   GLuint aa_radius;
 } cpu_lines_uniform_locations_t;
+
+typedef struct cpu_lines_attrib_locations
+{
+  GLuint clip_pos;
+  GLuint col;
+  GLuint line_params;
+} cpu_lines_attrib_locations_t;
 
 typedef struct cpu_lines_device
 {
   GLuint program_id;
   cpu_lines_uniform_locations_t uniforms;
+  cpu_lines_attrib_locations_t attribs;
 
-  GLuint attrib_clip_pos_location;
-  GLuint attrib_col_location;
-  GLuint attrib_line_params_location;
-  
   GLuint vao;
   GLuint vbo;
 
@@ -218,11 +222,10 @@ cpu_lines_init_device( void )
   glDeleteShader( vertex_shader );
   glDeleteShader( fragment_shader );
 
-
   // Record information from the glsl program so that we can communicate data back to it.
-  device->attrib_clip_pos_location    = glGetAttribLocation( device->program_id, "clip_pos" );
-  device->attrib_col_location         = glGetAttribLocation( device->program_id, "col" );
-  device->attrib_line_params_location = glGetAttribLocation( device->program_id, "line_params" );
+  device->attribs.clip_pos    = glGetAttribLocation( device->program_id, "clip_pos" );
+  device->attribs.col         = glGetAttribLocation( device->program_id, "col" );
+  device->attribs.line_params = glGetAttribLocation( device->program_id, "line_params" );
 
   device->uniforms.aa_radius  = glGetUniformLocation( device->program_id, "u_aa_radius" );
   
@@ -234,20 +237,20 @@ cpu_lines_init_device( void )
 
   glVertexArrayVertexBuffer( device->vao, binding_idx, device->vbo, 0, sizeof(cpu_lines_vertex_t) );
 
-  glEnableVertexArrayAttrib( device->vao, device->attrib_clip_pos_location );
-  glEnableVertexArrayAttrib( device->vao, device->attrib_col_location );
-  glEnableVertexArrayAttrib( device->vao, device->attrib_line_params_location );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.clip_pos );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.col );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.line_params );
 
-  glVertexArrayAttribFormat( device->vao, device->attrib_clip_pos_location, 
+  glVertexArrayAttribFormat( device->vao, device->attribs.clip_pos, 
                                           4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, clip_pos) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_col_location, 
+  glVertexArrayAttribFormat( device->vao, device->attribs.col, 
                                           4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, col) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_line_params_location, 
+  glVertexArrayAttribFormat( device->vao, device->attribs.line_params, 
                                           4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, line_params) );
 
-  glVertexArrayAttribBinding( device->vao, device->attrib_clip_pos_location, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_col_location, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_line_params_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.clip_pos, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.col, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.line_params, binding_idx );
   
   return device;
 }

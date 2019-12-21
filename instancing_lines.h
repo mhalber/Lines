@@ -11,21 +11,31 @@ void instancing_lines_term_device( void** );
 
 #ifdef INSTANCING_LINES_IMPLEMENTATION
 
+typedef struct instancing_lines_uniforms_locations
+{
+  GLuint mvp;
+  GLuint viewport_size;
+  GLuint aa_radius;
+} instancing_lines_uniforms_locations_t;
+
+typedef struct instancing_lines_attrib_locations
+{
+  GLuint quad_pos;
+  GLuint pos_width_0;
+  GLuint col_0;
+  GLuint pos_width_1;
+  GLuint col_1;
+} instancing_lines_attrib_locations_t;
+
 typedef struct instancing_lines_device
 {
   GLuint program_id;
-  GLuint uniform_mvp_location;
-  GLuint uniform_viewport_size_location;
-  GLuint uniform_aa_radius_location;
-  GLuint attrib_quad_pos_location;
-  GLuint attrib_pos_width_0_location;
-  GLuint attrib_col_0_location;
-  GLuint attrib_pos_width_1_location;
-  GLuint attrib_col_1_location;
   GLuint vao;
   GLuint line_vbo;
   GLuint quad_vbo;
   GLuint quad_ebo;
+  instancing_lines_uniforms_locations_t uniforms;
+  instancing_lines_attrib_locations_t attribs;
   uniform_data_t* uniform_data;
 } instancing_lines_device_t;
 
@@ -137,15 +147,15 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
   glDeleteShader( vertex_shader );
   glDeleteShader( fragment_shader );
 
-  device->attrib_quad_pos_location = glGetAttribLocation( device->program_id, "quad_pos" );
-  device->attrib_pos_width_0_location = glGetAttribLocation( device->program_id, "line_pos_width_0" );
-  device->attrib_col_0_location = glGetAttribLocation( device->program_id, "line_col_0" );
-  device->attrib_pos_width_1_location = glGetAttribLocation( device->program_id, "line_pos_width_1" );
-  device->attrib_col_1_location = glGetAttribLocation( device->program_id, "line_col_1" );
+  device->attribs.quad_pos    = glGetAttribLocation( device->program_id, "quad_pos" );
+  device->attribs.pos_width_0 = glGetAttribLocation( device->program_id, "line_pos_width_0" );
+  device->attribs.col_0       = glGetAttribLocation( device->program_id, "line_col_0" );
+  device->attribs.pos_width_1 = glGetAttribLocation( device->program_id, "line_pos_width_1" );
+  device->attribs.col_1       = glGetAttribLocation( device->program_id, "line_col_1" );
 
-  device->uniform_mvp_location = glGetUniformLocation( device->program_id, "u_mvp" );
-  device->uniform_aa_radius_location = glGetUniformLocation( device->program_id, "u_aa_radius" );
-  device->uniform_viewport_size_location = glGetUniformLocation( device->program_id, "u_viewport_size" );
+  device->uniforms.mvp           = glGetUniformLocation( device->program_id, "u_mvp" );
+  device->uniforms.aa_radius     = glGetUniformLocation( device->program_id, "u_aa_radius" );
+  device->uniforms.viewport_size = glGetUniformLocation( device->program_id, "u_viewport_size" );
 }
 
 void
@@ -159,20 +169,20 @@ instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
   glVertexArrayVertexBuffer( device->vao, binding_idx, device->line_vbo, 0, 2 * sizeof(vertex_t) );
   glVertexArrayBindingDivisor( device->vao, binding_idx, 1 );
 
-  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_width_0_location );
-  glEnableVertexArrayAttrib( device->vao, device->attrib_col_0_location );
-  glEnableVertexArrayAttrib( device->vao, device->attrib_pos_width_1_location );
-  glEnableVertexArrayAttrib( device->vao, device->attrib_col_1_location );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.pos_width_0 );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.col_0 );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.pos_width_1 );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.col_1 );
 
-  glVertexArrayAttribFormat( device->vao, device->attrib_pos_width_0_location, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_col_0_location, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_pos_width_1_location, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, pos_width) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_col_1_location, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.pos_width_0, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.col_0, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.pos_width_1, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, pos_width) );
+  glVertexArrayAttribFormat( device->vao, device->attribs.col_1, 4, GL_FLOAT, GL_FALSE, sizeof(vertex_t) + offsetof(vertex_t, col) );
 
-  glVertexArrayAttribBinding( device->vao, device->attrib_pos_width_0_location, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_col_0_location, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_pos_width_1_location, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_col_1_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.pos_width_0, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.col_0, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.pos_width_1, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attribs.col_1, binding_idx );
 
 
   binding_idx++;
@@ -194,9 +204,9 @@ instancing_lines_setup_geometry_storage( instancing_lines_device_t* device )
   glVertexArrayVertexBuffer( device->vao, binding_idx, device->quad_vbo, 0, 3*sizeof(float) );
   glVertexArrayElementBuffer( device->vao, device->quad_ebo );
 
-  glEnableVertexArrayAttrib( device->vao, device->attrib_quad_pos_location );
-  glVertexArrayAttribFormat( device->vao, device->attrib_quad_pos_location, 3, GL_FLOAT, GL_FALSE, 0 );
-  glVertexArrayAttribBinding( device->vao, device->attrib_quad_pos_location, binding_idx );
+  glEnableVertexArrayAttrib( device->vao, device->attribs.quad_pos );
+  glVertexArrayAttribFormat( device->vao, device->attribs.quad_pos, 3, GL_FLOAT, GL_FALSE, 0 );
+  glVertexArrayAttribBinding( device->vao, device->attribs.quad_pos, binding_idx );
 }
 
 void*
@@ -237,9 +247,9 @@ instancing_lines_render( const void* device_in, const int32_t count )
 {
   const instancing_lines_device_t* device = device_in;
   glUseProgram( device->program_id );
-  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->uniform_data->mvp );
-  glUniform2fv( device->uniform_viewport_size_location, 1, device->uniform_data->viewport );
-  glUniform2fv( device->uniform_aa_radius_location, 1, device->uniform_data->aa_radius );
+  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->uniform_data->mvp );
+  glUniform2fv( device->uniforms.viewport_size, 1, device->uniform_data->viewport );
+  glUniform2fv( device->uniforms.aa_radius, 1, device->uniform_data->aa_radius );
 
   glBindVertexArray( device->vao );
   glDrawElementsInstanced( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL, count>>1 );
