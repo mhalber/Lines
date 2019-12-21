@@ -16,20 +16,6 @@
 
 #define MAX_VERTS 3 * 12 * 1024 * 1024
 
-/*
-  TODOs:
-  [x] Implement CPU based line expansion (2D) -> User line buffer to gpu quad buffer.
-  [ ] Add timing infrastracture
-  [x]   -> How to time gpu time properly?? Using performance counters maybe?
-
-
-  [ ] Add a better / more taxing testing scheme
-  [ ] Add on-screen display for timing -- nuklear / dbgdraw / custom thing using stbtt?
-  [ ] Add someway to switch between different rendering modes
-  [x] Add a nicer way to deal with storing the device data
-
-*/
-
 typedef struct vertex
 {
   union
@@ -39,6 +25,13 @@ typedef struct vertex
   };
   msh_vec4_t col;
 } vertex_t;
+
+typedef struct uniform_data
+{
+  float* mvp;
+  float* viewport;
+  float* aa_radius;
+} uniform_data_t;
 
 #define GL_LINES_IMPLEMENTATION
 #define CPU_LINES_IMPLEMENTATION
@@ -55,14 +48,14 @@ typedef struct line_draw_engine
 {
   void *device;
   void *(*init_device)(void);
-  uint32_t (*update)(void *, const void *, int32_t, int32_t, float *, float *);
+  uint32_t (*update)(void *, const void *, int32_t, int32_t, uniform_data_t* uniforms );
   void (*render)(const void *, const int32_t);
   void (*term_device)(void**);
 } line_draw_engine_t;
 
 void setup( line_draw_engine_t *engine,
             void *(*init_device_ptr)(void),
-            uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t, float *, float *),
+            uint32_t (*update_ptr)(void *, const void *, int32_t, int32_t, uniform_data_t* uniforms ),
             void (*render_ptr)(const void *, const int32_t ),
             void (*term_device_ptr)(void**) )
 {
@@ -75,9 +68,9 @@ void setup( line_draw_engine_t *engine,
 }
 
 uint32_t
-update( line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport )
+update( line_draw_engine_t *engine, const void *data, int32_t n_elems, int32_t elem_size, uniform_data_t* uniforms  )
 {
-  return engine->update(engine->device, data, n_elems, elem_size, mvp, viewport );
+  return engine->update(engine->device, data, n_elems, elem_size, uniforms );
 }
 
 void render( line_draw_engine_t *engine, const int32_t count )
@@ -92,18 +85,18 @@ void terminate( line_draw_engine_t* engine )
 
 void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf_cap )
 {
-  #if 0
+  #if 1
   vertex_t *dst1 = line_buf;
   vertex_t *dst2 = line_buf + 1;
 
-  int32_t grid_w = 1;
-  int32_t grid_h = 1;
-  int32_t grid_d = 1;
+  int32_t grid_w = 100;
+  int32_t grid_h = 50;
+  int32_t grid_d = 3;
   float grid_step = 0.1f;
 
   int32_t circle_res = 6;
   float d_theta = MSH_TWO_PI / circle_res;
-  float radius = 1.4f;
+  float radius = 0.04f;
 
   float r = 0.0;
   for (int32_t iz = -grid_d / 2; iz <= grid_d / 2; iz++)
@@ -123,19 +116,19 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
         msh_vec3_t prev_pos = msh_vec3(cx + radius * sin(0.0f), cy + radius * cos(0.0f), z );
         float x = 0.0f;
         float y = 0.0f;
-        msh_vec3_t col = msh_vec3( r, g, b );
+        // msh_vec3_t col = msh_vec3( r, g, b );
         for (int i = 1; i <= circle_res; ++i)
         {
           x = cx + radius * sin(i * d_theta);
           y = cy + radius * cos(i * d_theta);
 
           dst1->pos = prev_pos;
-          dst1->width = 15.0f;
+          dst1->width = 1.0f;
           dst2->pos = msh_vec3(x, y, z);
-          dst2->width = 15.0f;
+          dst2->width = 1.0f;
           prev_pos = dst2->pos;
-          dst1->col = msh_vec3_zeros();
-          dst2->col = msh_vec3_zeros();
+          dst1->col = msh_vec4(0, 0, 0, 1);
+          dst2->col = msh_vec4(0, 0, 0, 1);
           dst1 += 2;
           dst2 += 2;
           *line_buf_len += 2;
@@ -152,20 +145,21 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
   #else
     vertex_t *dst = line_buf;
     float line_width = 0.5;
-    for( float f = -3.6; f < 0.6 + 0.1; f+= 0.3 )
+    for( float f = -6.6; f < 2.0 ; f += 0.4 )
     {
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.2, -1.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.2,  1.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.4, -2.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.4,  2.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
       line_width += 0.5;
     }
     int32_t circle_res = 32;
     float d_theta = MSH_TWO_PI / circle_res;
     float radius1 = 0.1f;
-    float radius2 = 1.0f;
-    float cx = 2.1;
+    float radius2 = 2.0f;
+    float cx = 4.5;
     float cy = 0.0;
     line_width = 1.0;
+
     for (int i = 0; i < circle_res; ++i)
     {
       float x1 = cx + radius1 * sin(i * d_theta);
@@ -182,6 +176,24 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
   #endif
 }
 
+int32_t active_engine_idx = 1;
+const char* method_names[5] = 
+{
+  "GL Lines",
+  "CPU Lines",
+  "Geometry Shader Lines",
+  "Tex. Buffer Lines",
+  "Instancing Lines"
+};
+void key_callback( GLFWwindow* window, int key, int scancode, int action, int mods )
+{
+  if( key == GLFW_KEY_1 && action == GLFW_PRESS ) { active_engine_idx = 0; }
+  if( key == GLFW_KEY_2 && action == GLFW_PRESS ) { active_engine_idx = 1; }
+  if( key == GLFW_KEY_3 && action == GLFW_PRESS ) { active_engine_idx = 2; }
+  if( key == GLFW_KEY_4 && action == GLFW_PRESS ) { active_engine_idx = 3; }
+  if( key == GLFW_KEY_5 && action == GLFW_PRESS ) { active_engine_idx = 4; }
+}
+
 int32_t
 main(int32_t argc, char **argv)
 {
@@ -196,7 +208,6 @@ main(int32_t argc, char **argv)
   int32_t window_width = 1024, window_height = 512;
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-  // glfwWindowHint(GLFW_SAMPLES, 4);
   glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
@@ -209,6 +220,7 @@ main(int32_t argc, char **argv)
     return EXIT_FAILURE;
   }
 
+  glfwSetKeyCallback( window, key_callback );
   glfwMakeContextCurrent(window);
   
   if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
@@ -229,13 +241,12 @@ main(int32_t argc, char **argv)
   uint32_t line_buf_len;
   vertex_t *line_buf = malloc(line_buf_cap * sizeof(vertex_t));
 
-  uint32_t active_idx = 2;
-  line_draw_engine_t engines[5] = {0};
-  setup(engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render, &gl_lines_term_device );
-  setup(engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render, &cpu_lines_term_device );
-  setup(engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render, &geom_shdr_lines_term_device );
-  setup(engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render, &tex_buffer_lines_term_device );
-  setup(engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render, &instancing_lines_term_device);
+  line_draw_engine_t engines[5] = {};
+  setup( engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render, &gl_lines_term_device );
+  setup( engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render, &cpu_lines_term_device );
+  setup( engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render, &geom_shdr_lines_term_device );
+  setup( engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render, &tex_buffer_lines_term_device );
+  setup( engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render, &instancing_lines_term_device);
 
   msh_camera_t cam = {0};
   msh_camera_init(&cam, &(msh_camera_desc_t){.eye = msh_vec3( 0.0f, 0.0f, 6.0f ),
@@ -277,7 +288,8 @@ main(int32_t argc, char **argv)
     generate_line_data(line_buf, &line_buf_len, line_buf_cap);
     angle += 0.1f;
     if( angle >= 360.0f ) { angle = 0.0f; }
-    msh_mat4_t model = msh_mat4_identity();//msh_post_rotate( msh_mat4_identity(), msh_deg2rad(angle), msh_vec3_posy() );
+    msh_mat4_t model = msh_mat4_identity();
+    //msh_post_rotate( msh_mat4_identity(), msh_deg2rad(angle), msh_vec3_posy() );
     msh_mat4_t mvp = msh_mat4_mul(vp, model);
     t2 = msh_time_now();
 
@@ -291,9 +303,11 @@ main(int32_t argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
-    line_draw_engine_t *active_engine = engines + active_idx;
-    uint32_t elem_count = update(active_engine, line_buf, line_buf_len, sizeof(vertex_t), &mvp.data[0], &cam.viewport.z);
-    render(active_engine, elem_count );
+    msh_vec2_t aa_radii = msh_vec2( 1.5f, 1.5f );
+    line_draw_engine_t *active_engine = engines + active_engine_idx;
+    uniform_data_t uniform_data = { .mvp = &mvp.data[0], .viewport = &cam.viewport.z, .aa_radius = &aa_radii.x };
+    uint32_t elem_count = update( active_engine, line_buf, line_buf_len, sizeof(vertex_t), &uniform_data );
+    render( active_engine, elem_count );
 
     t2 = msh_time_now();
     glEndQuery( GL_TIME_ELAPSED );
@@ -312,7 +326,7 @@ main(int32_t argc, char **argv)
       timers[0] /= 5.0f;
       timers[1] /= 5.0f;
       timers[2] /= 5.0f;
-      snprintf(name, 128, "Lines - %6.4fms - %6.4fms - %6.4fms", timers[0], timers[1], timers[2] );
+      snprintf(name, 128, "Method : %s - %6.4fms - %6.4fms - %6.4fms", method_names[active_engine_idx], timers[0], timers[1], timers[2] );
       glfwSetWindowTitle(window, name);
       timers[0] = 0.0f;
       timers[1] = 0.0f;

@@ -3,8 +3,8 @@
 #define CPU_LINES_H
 
 void* cpu_lines_init_device();
-uint32_t cpu_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size,
-                           float* mvp, float* viewport );
+uint32_t cpu_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size, 
+                           uniform_data_t* uniform_data );
 void cpu_lines_render( const void* device, const int32_t count );
 void cpu_lines_term_device( void** device );
 
@@ -13,7 +13,8 @@ void cpu_lines_term_device( void** device );
 #ifdef CPU_LINES_IMPLEMENTATION
 
 // NOTE(maciej): We need a fatter vertices to communicate all required info. 
-//               It is possible to pack this info more tightly and then unpack on shader side, but this is a reference ///               implementation, so we don't care if we sacrifice performance for clarity
+//               It is possible to pack this info more tightly and then unpack on shader side, but this is a reference 
+//               implementation, so we don't care if we sacrifice performance for clarity.
 typedef struct cpu_lines_vertex
 {
   msh_vec4_t clip_pos;
@@ -24,7 +25,7 @@ typedef struct cpu_lines_vertex
 void
 cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
                   cpu_lines_vertex_t* quad_buf, uint32_t *quad_buf_len, uint32_t quad_buf_cap,
-                  msh_mat4_t mvp, msh_vec2_t viewport_size )
+                  msh_mat4_t mvp, msh_vec2_t viewport_size, msh_vec2_t aa_radius )
 {
   if( line_buf_len * 3 >= quad_buf_cap )
   {
@@ -32,11 +33,9 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
     return;
   }
 
-  //TODO(maciej): This needs to be passed through
-  msh_vec2_t aa_radius = msh_vec2(2.0, 2.0);
-
   cpu_lines_vertex_t* dst = quad_buf;
   *quad_buf_len = 0;
+
   float width = viewport_size.x;
   float height = viewport_size.y;
   float aspect_ratio = height / width;
@@ -46,68 +45,94 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
     const vertex_t* src_v0 = line_buf + i;
     const vertex_t* src_v1 = src_v0 + 1;
 
-    // NOTE(maciej): Ensure that variables here are such that they represent correct
+    // Move vertices from model space to clip space
     msh_vec4_t clip_a0 = msh_mat4_vec4_mul( mvp, msh_vec4(src_v0->pos.x, src_v0->pos.y, src_v0->pos.z, 1.0f) );
-    msh_vec4_t clip_a1;
     msh_vec4_t clip_b0 = msh_mat4_vec4_mul( mvp, msh_vec4(src_v1->pos.x, src_v1->pos.y, src_v1->pos.z, 1.0f) );
+    msh_vec4_t clip_a1;
     msh_vec4_t clip_b1;
 
-    // NDC after perspective divide
+    // Perspective divide to create vertex location in normalized device coordinates
     msh_vec2_t ndc_a = msh_vec2_scalar_div( msh_vec2(clip_a0.x, clip_a0.y), clip_a0.w );
     msh_vec2_t ndc_b = msh_vec2_scalar_div( msh_vec2(clip_b0.x, clip_b0.y), clip_b0.w );
 
-    msh_vec2_t dir = msh_vec2_sub( ndc_b, ndc_a );
-    msh_vec2_t viewport_line = msh_vec2_mul( dir, viewport_size );
-    dir = msh_vec2_normalize( msh_vec2( dir.x, dir.y*aspect_ratio ) );
+    // Calculate the line vector in viewport space, as well as the direction of the line (corrected for aspect ratio)
+    msh_vec2_t line_vector = msh_vec2_sub( ndc_b, ndc_a );
+    msh_vec2_t viewport_line_vector = msh_vec2_mul( line_vector, viewport_size );
+    msh_vec2_t dir = msh_vec2_normalize( msh_vec2( line_vector.x, line_vector.y * aspect_ratio ) );
 
-    float line_width_a = src_v0->width + aa_radius.x;
-    float line_width_b = src_v1->width + aa_radius.x;
-    float extension_length = (1.5f + aa_radius.y);
-    float line_length  = msh_vec2_norm( viewport_line ) + 2.0*extension_length;
+    // Calculate vectors modifying the vertex positions in 
+    float      extension_length = aa_radius.y;
+    float      line_width_a     = msh_max( 1.0f, src_v0->width ) + aa_radius.x;
+    float      line_width_b     = msh_max( 1.0f, src_v1->width ) + aa_radius.x;
+    float      line_length      = msh_vec2_norm( viewport_line_vector ) + 2.0f * extension_length;
+    msh_vec2_t normal           = msh_vec2( -dir.y, dir.x );
+    msh_vec2_t normal_a         = msh_vec2_mul( msh_vec2( line_width_a / width, line_width_a / height), normal );
+    msh_vec2_t normal_b         = msh_vec2_mul( msh_vec2( line_width_b / width, line_width_b / height), normal );
+    msh_vec2_t extension        = msh_vec2_mul( msh_vec2( extension_length / width, extension_length / height), dir );
 
-    msh_vec2_t normal_a = msh_vec2_mul( msh_vec2( line_width_a/width, line_width_a/height), msh_vec2( -dir.y, dir.x ) );
-    msh_vec2_t normal_b = msh_vec2_mul( msh_vec2( line_width_b/width, line_width_b/height), msh_vec2( -dir.y, dir.x ) );
+    // Calculate the four corners of a quad in clip space (revert w division after adding correct vectors to input position)
+    clip_a1 = msh_vec4( (ndc_a.x - normal_a.x - extension.x) * clip_a0.w,
+                        (ndc_a.y - normal_a.y - extension.y) * clip_a0.w,
+                        clip_a0.z,
+                        clip_a0.w );
+    clip_a0 = msh_vec4( (ndc_a.x + normal_a.x - extension.x) * clip_a0.w,
+                        (ndc_a.y + normal_a.y - extension.y) * clip_a0.w,
+                        clip_a0.z,
+                        clip_a0.w );
 
-    clip_a1 = msh_vec4( (ndc_a.x - normal_a.x) * clip_a0.w, (ndc_a.y - normal_a.y) * clip_a0.w, clip_a0.z, clip_a0.w );
-    clip_a0 = msh_vec4( (ndc_a.x + normal_a.x) * clip_a0.w, (ndc_a.y + normal_a.y) * clip_a0.w, clip_a0.z, clip_a0.w );
+    clip_b1 = msh_vec4( (ndc_b.x - normal_b.x + extension.x) * clip_b0.w,
+                        (ndc_b.y - normal_b.y + extension.y) * clip_b0.w,
+                        clip_b0.z,
+                        clip_b0.w );
+    clip_b0 = msh_vec4( (ndc_b.x + normal_b.x + extension.x) * clip_b0.w,
+                        (ndc_b.y + normal_b.y + extension.y) * clip_b0.w,
+                        clip_b0.z,
+                        clip_b0.w );
 
-    clip_b1 = msh_vec4( (ndc_b.x - normal_b.x) * clip_b0.w, (ndc_b.y - normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
-    clip_b0 = msh_vec4( (ndc_b.x + normal_b.x) * clip_b0.w, (ndc_b.y + normal_b.y) * clip_b0.w, clip_b0.z, clip_b0.w );
+    // Adjust colors in case line width is smaller than 1 pixels, to simulate a partial coverage.
+    float alpha_a = msh_min( src_v0->col.w * src_v0->width, 1.0f );
+    float alpha_b = msh_min( src_v0->col.w * src_v1->width, 1.0f );
 
-
+    // Communicate the new data to the buffer. We draw arrays, so each quad is 2 triangles.
+    // Note the additional "line_params" attribute that communicates the correct data to the glsl program
     (dst + 0)->clip_pos = clip_a0;
-    (dst + 0)->col = src_v0->col;
-    (dst + 0)->line_params = msh_vec4( -1.0, -1.0, line_width_a, line_length );
+    (dst + 0)->col = msh_vec4( src_v0->col.x, src_v0->col.y, src_v0->col.z, alpha_a );
+    (dst + 0)->line_params = msh_vec4( -1.0, -1.0, line_width_a, 0.5*line_length );
 
     (dst + 1)->clip_pos = clip_a1;
-    (dst + 1)->col = src_v0->col;
-    (dst + 1)->line_params = msh_vec4( 1.0, -1.0, line_width_a, line_length );
+    (dst + 1)->col = msh_vec4( src_v0->col.x, src_v0->col.y, src_v0->col.z, alpha_a );
+    (dst + 1)->line_params = msh_vec4( 1.0, -1.0, line_width_a, 0.5*line_length );
 
     (dst + 2)->clip_pos = clip_b0;
-    (dst + 2)->col = src_v1->col;
-    (dst + 2)->line_params = msh_vec4( -1.0, 1.0, line_width_b, line_length );
+    (dst + 2)->col = msh_vec4( src_v1->col.x, src_v1->col.x, src_v1->col.z, alpha_b );
+    (dst + 2)->line_params = msh_vec4( -1.0, 1.0, line_width_b, 0.5*line_length );
 
     (dst + 3)->clip_pos = clip_a1;
-    (dst + 3)->col = src_v0->col;
-    (dst + 3)->line_params = msh_vec4( 1.0, -1.0, line_width_a, line_length );
+    (dst + 3)->col = msh_vec4( src_v0->col.x, src_v0->col.y, src_v0->col.z, alpha_a );
+    (dst + 3)->line_params = msh_vec4( 1.0, -1.0, line_width_a, 0.5*line_length );
 
     (dst + 4)->clip_pos = clip_b0;
-    (dst + 4)->col = src_v1->col;
-    (dst + 4)->line_params = msh_vec4( -1.0, 1.0, line_width_b, line_length );
+    (dst + 4)->col = msh_vec4( src_v1->col.x, src_v1->col.x, src_v1->col.z, alpha_b );
+    (dst + 4)->line_params = msh_vec4( -1.0, 1.0, line_width_b, 0.5*line_length );
 
     (dst + 5)->clip_pos = clip_b1;
-    (dst + 5)->col = src_v1->col;
-    (dst + 5)->line_params = msh_vec4( 1.0, 1.0, line_width_b, line_length );
+    (dst + 5)->col = msh_vec4( src_v1->col.x, src_v1->col.x, src_v1->col.z, alpha_b );
+    (dst + 5)->line_params = msh_vec4( 1.0, 1.0, line_width_b, 0.5*line_length );
 
     *quad_buf_len += 6;
     dst = quad_buf + (*quad_buf_len);
   }
 }
 
+typedef struct cpu_lines_uniform_locations
+{
+  GLuint aa_radius;
+} cpu_lines_uniform_locations_t;
+
 typedef struct cpu_lines_device
 {
   GLuint program_id;
-  GLuint uniform_aa_radius_location;
+  cpu_lines_uniform_locations_t uniforms;
 
   GLuint attrib_clip_pos_location;
   GLuint attrib_col_location;
@@ -117,18 +142,22 @@ typedef struct cpu_lines_device
   GLuint vbo;
 
   cpu_lines_vertex_t* quad_buf;
-  float* mvp;
-  float* viewport;
-  float* aa_radius;
+  uniform_data_t* uniform_data;
+
 } cpu_lines_device_t;
 
-
-void
-cpu_lines_create_shader_program( cpu_lines_device_t* device )
+void*
+cpu_lines_init_device( void )
 {
+  cpu_lines_device_t* device = malloc( sizeof(cpu_lines_device_t) );
+  memset( device, 0, sizeof(cpu_lines_device_t) );
+  device->quad_buf = malloc( MAX_VERTS * sizeof(vertex_t) );
+
+  // Inline shaders
   const char* vs_src = 
     GL_UTILS_SHDR_VERSION
-    GL_UTILS_SHDR_SOURCE(
+    GL_UTILS_SHDR_SOURCE
+    (
       layout(location = 0) in vec4 clip_pos;
       layout(location = 1) in vec4 col;
       layout(location = 2) in vec4 line_params;
@@ -146,7 +175,8 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
   
   const char* fs_src = 
     GL_UTILS_SHDR_VERSION
-    GL_UTILS_SHDR_SOURCE(
+    GL_UTILS_SHDR_SOURCE
+    (
       layout(location = 0) uniform vec2 u_aa_radius;
       in vec4 v_col;
       in noperspective vec4 v_line_params;
@@ -165,6 +195,7 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
       }
     );
 
+  // Setup shader program
   GLuint vertex_shader   = glCreateShader( GL_VERTEX_SHADER );
   GLuint fragment_shader = glCreateShader( GL_FRAGMENT_SHADER );
 
@@ -187,70 +218,68 @@ cpu_lines_create_shader_program( cpu_lines_device_t* device )
   glDeleteShader( vertex_shader );
   glDeleteShader( fragment_shader );
 
-  device->attrib_clip_pos_location = glGetAttribLocation( device->program_id, "clip_pos" );
-  device->attrib_col_location = glGetAttribLocation( device->program_id, "col" );
-  device->attrib_line_params_location = glGetAttribLocation( device->program_id, "line_params" );
-  
-  device->uniform_aa_radius_location = glGetUniformLocation( device->program_id, "u_aa_radius" );
-}
 
-void
-cpu_lines_setup_geometry_storage( cpu_lines_device_t* device )
-{
-  GLuint  stream_idx = 0;
+  // Record information from the glsl program so that we can communicate data back to it.
+  device->attrib_clip_pos_location    = glGetAttribLocation( device->program_id, "clip_pos" );
+  device->attrib_col_location         = glGetAttribLocation( device->program_id, "col" );
+  device->attrib_line_params_location = glGetAttribLocation( device->program_id, "line_params" );
+
+  device->uniforms.aa_radius  = glGetUniformLocation( device->program_id, "u_aa_radius" );
+  
+  // Setup the storage on the gpu
+  GLuint binding_idx = 0;
   glCreateVertexArrays( 1, &device->vao );
   glCreateBuffers( 1, &device->vbo );
   glNamedBufferStorage( device->vbo, MAX_VERTS * sizeof(cpu_lines_vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT );
 
-  glVertexArrayVertexBuffer( device->vao, stream_idx, device->vbo, 0, sizeof(cpu_lines_vertex_t) );
+  glVertexArrayVertexBuffer( device->vao, binding_idx, device->vbo, 0, sizeof(cpu_lines_vertex_t) );
 
   glEnableVertexArrayAttrib( device->vao, device->attrib_clip_pos_location );
   glEnableVertexArrayAttrib( device->vao, device->attrib_col_location );
   glEnableVertexArrayAttrib( device->vao, device->attrib_line_params_location );
 
-  glVertexArrayAttribFormat( device->vao, device->attrib_clip_pos_location, 4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, clip_pos) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_col_location, 3, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, col) );
-  glVertexArrayAttribFormat( device->vao, device->attrib_line_params_location, 4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, line_params) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_clip_pos_location, 
+                                          4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, clip_pos) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_col_location, 
+                                          4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, col) );
+  glVertexArrayAttribFormat( device->vao, device->attrib_line_params_location, 
+                                          4, GL_FLOAT, GL_FALSE, offsetof(cpu_lines_vertex_t, line_params) );
 
-  glVertexArrayAttribBinding( device->vao, device->attrib_clip_pos_location, stream_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_col_location, stream_idx );
-  glVertexArrayAttribBinding( device->vao, device->attrib_line_params_location, stream_idx );
-}
-
-void*
-cpu_lines_init_device( void )
-{
-  cpu_lines_device_t* device = malloc( sizeof(cpu_lines_device_t) );
-  memset( device, 0, sizeof(cpu_lines_device_t) );
-  device->quad_buf = malloc( MAX_VERTS * sizeof(vertex_t) );
-  cpu_lines_create_shader_program( device );
-  cpu_lines_setup_geometry_storage( device );
+  glVertexArrayAttribBinding( device->vao, device->attrib_clip_pos_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_col_location, binding_idx );
+  glVertexArrayAttribBinding( device->vao, device->attrib_line_params_location, binding_idx );
+  
   return device;
 }
 
 void cpu_lines_term_device( void** device_in )
 {
   cpu_lines_device_t* device = *device_in;
-  free(device->quad_buf);
-  free(device);
+  glDeleteProgram( device->program_id );
+  glDeleteBuffers( 1, &device->vbo );
+  glDeleteVertexArrays( 1, &device->vao );
+  free( device->quad_buf );
+  free( device );
   *device_in = NULL;
 }
 
 uint32_t
 cpu_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size,
-                  float* mvp, float* viewport )
+                  uniform_data_t* uniform_data )
 {
-  static msh_vec2_t aa_radius_data = msh_vec2( 2.0f, 2.0f );
-
   cpu_lines_device_t* device = device_in;
-  device->mvp = mvp;
-  device->viewport = viewport;
-  device->aa_radius = &aa_radius_data.x;
+  
+  // Assign uniforms form the outside
+  device->uniform_data = uniform_data;
 
+  // Pass data to the line expansion
+  msh_mat4_t mvp_mat;       memcpy( mvp_mat.data, uniform_data->mvp, 16 * sizeof(float) );
+  msh_vec2_t viewport_size; memcpy( viewport_size.data, uniform_data->viewport, 2 * sizeof(float) );
+  msh_vec2_t aa_radius;     memcpy( aa_radius.data, uniform_data->aa_radius, 2 * sizeof(float) );
   uint32_t quad_buf_len = 0;
-  msh_mat4_t mvp_mat; memcpy( mvp_mat.data, device->mvp, 16*sizeof(float) );
-  msh_vec2_t viewport_size; memcpy( viewport_size.data, device->viewport, 2*sizeof(float) );
-  cpu_lines_expand( data, n_elems, device->quad_buf, &quad_buf_len, MAX_VERTS, mvp_mat, viewport_size );
+  cpu_lines_expand( data, n_elems, device->quad_buf, &quad_buf_len, MAX_VERTS, mvp_mat, viewport_size, aa_radius );
+  
+  // Copy data to gpu
   glNamedBufferSubData( device->vbo, 0, quad_buf_len * sizeof(cpu_lines_vertex_t), device->quad_buf );
   
   return quad_buf_len;
@@ -260,8 +289,9 @@ void
 cpu_lines_render( const void* device_in, const int32_t count )
 {
   const cpu_lines_device_t* device = device_in;
+
   glUseProgram( device->program_id );
-  glUniform2fv( device->uniform_aa_radius_location, 1, device->aa_radius ); // TODO(maciej): Add radius to the device
+  glUniform2fv( device->uniforms.aa_radius, 1, device->uniform_data->aa_radius );
 
   glBindVertexArray( device->vao );
   glDrawArrays( GL_TRIANGLES, 0, count );

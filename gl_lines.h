@@ -2,7 +2,8 @@
 #define GL_LINES_H
 
 void* gl_lines_init_device( void );
-uint32_t gl_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport );
+uint32_t gl_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size,
+                          uniform_data_t* uniform_data );
 void gl_lines_render( const void* device, const int32_t count );
 void gl_lines_term_device( void** device );
 
@@ -28,8 +29,9 @@ typedef struct gl_lines_device
   GLuint program_id;
   GLuint vao;
   GLuint vbo;
-  float* mvp;
-  float* viewport;
+  uniform_data_t* uniform_data;
+  vertex_t* vertex_data;
+  int32_t vertex_data_len;
   gl_lines_uniform_locations_t uniforms;
   gl_lines_attrib_locations_t attribs;
 } gl_lines_device_t;
@@ -126,12 +128,16 @@ gl_lines_term_device( void** device_in )
 }
 
 uint32_t
-gl_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size, float* mvp, float* viewport )
+gl_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size, uniform_data_t* uniform_data )
 {
   gl_lines_device_t* device = device_in;
-  device->mvp = mvp;
-  device->viewport = viewport;
+
+  device->uniform_data    = uniform_data;
+  device->vertex_data     = (vertex_t*)data;
+  device->vertex_data_len = n_elems;
+
   glNamedBufferSubData( device->vbo, 0, n_elems*elem_size, data );
+
   return n_elems;
 }
 
@@ -142,27 +148,36 @@ gl_lines_render( const void* device_in, const int32_t count )
 
   glEnable(GL_LINE_SMOOTH );
   glUseProgram( device->program_id );
-  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->mvp );
+  glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->uniform_data->mvp );
 
   glBindVertexArray( device->vao );
-  
-  float line_width = 0.5f;
-  int32_t offset = 0;
-  // Lines
-  for( int i = 0; i < 15 ; ++i )
-  {
-    glLineWidth( line_width );
-    glDrawArrays( GL_LINES, offset, 2 );
-    offset += 2;
-    line_width += 0.5f;
-  }
-  // circle
-  glLineWidth( 1.0f );
-  glDrawArrays( GL_LINES, offset, count-offset );
 
-  glLineWidth(1.0f);
-  glBindVertexArray( 0 );
-  glUseProgram( 0 );
+  // Since the glLineWidth sets the line width for an entire draw call, we need to have this less than ideal loop
+  // checking for the line width in vertex buffer.
+  int32_t cur_count = 1;
+  int32_t offset = 0;
+  for( int32_t i = 0; i < device->vertex_data_len - 1; ++i )
+  {
+    vertex_t* v = device->vertex_data + i;
+    vertex_t* next_v = device->vertex_data + i + 1;
+    float cur_width = v->width;
+    float next_width = next_v->width;
+    if( i == device->vertex_data_len - 2 )
+    {
+      cur_count += 1;
+    }
+    if( cur_width != next_width || i == device->vertex_data_len - 2 )
+    {
+      glLineWidth( cur_width );
+      glDrawArrays( GL_LINES, offset, cur_count );
+      offset += cur_count;
+      cur_count = 1;
+    }
+    else
+    {
+      cur_count += 1;
+    }
+  }
   
   glDisable( GL_LINE_SMOOTH );
 }

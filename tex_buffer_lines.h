@@ -3,7 +3,7 @@
 
 void* tex_buffer_lines_init_device( void );
 uint32_t tex_buffer_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size,
-                                  float* mvp, float* viewport_size );
+                                  uniform_data_t* uniform_data );
 void tex_buffer_lines_render( const void* device, const int32_t count );
 void tex_buffer_lines_term_device( void** );
 
@@ -30,16 +30,13 @@ typedef struct tex_buffer_lines_device
   GLuint64 line_data_texture_handle;
   GLuint uniform_line_data_handle_location;
 
-  float* mvp;
-  float* viewport_size;
-  float* aa_radius;
+  uniform_data_t* uniform_data;
 } tex_buffer_lines_device_t;
 
 
 void*
 tex_buffer_lines_init_device()
 {
-  // int32_t list[6] = 
   tex_buffer_lines_device_t* device = malloc( sizeof(tex_buffer_lines_device_t) );
   memset( device, 0, sizeof(tex_buffer_lines_device_t) );
 
@@ -94,20 +91,20 @@ tex_buffer_lines_init_device()
         float u_height = u_viewport_size[1];
         float u_aspect_ratio = u_height / u_width;
 
-        vec4 clip_pos_0 = u_mvp * vec4( pos_width[0].xyz, 1.0f );
-        float line_width_0 = pos_width[0].w + u_aa_radius.x;
+        vec4 clip_pos_0 = u_mvp * vec4( pos_width[0].xyz, 1.0 );
+        float line_width_0 = max( pos_width[0].w, 1.0 ) + u_aa_radius.x;
 
-        vec4 clip_pos_1 = u_mvp * vec4( pos_width[1].xyz, 1.0f );
-        float line_width_1 = pos_width[1].w + u_aa_radius.x;
+        vec4 clip_pos_1 = u_mvp * vec4( pos_width[1].xyz, 1.0 );
+        float line_width_1 = max( pos_width[1].w, 1.0 ) + u_aa_radius.x;
 
         vec2 ndc_pos_0 = clip_pos_0.xy / clip_pos_0.w;
         vec2 ndc_pos_1 = clip_pos_1.xy / clip_pos_1.w;
 
-        float extension_length = (1.5f + u_aa_radius.y);
+        float extension_length = (u_aa_radius.y);
         vec2 line = ndc_pos_1 - ndc_pos_0;
         vec2 dir = normalize( vec2( line.x, line.y * u_aspect_ratio ) );
-        vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2(-dir.y, dir.x );
-        vec2 normal_1 = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2(-dir.y, dir.x );
+        vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2( -dir.y, dir.x );
+        vec2 normal_1 = vec2( line_width_1/u_width, line_width_1/u_height ) * vec2( -dir.y, dir.x );
         vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
 
         ivec2 quad_pos = quad[quad_id];
@@ -122,6 +119,7 @@ tex_buffer_lines_init_device()
         vec2 dir_x = quad_pos.x * line + v_v * extension;
 
         v_col = color[ quad_pos.x ];
+        v_col.a = min( pos_width[quad_pos.x].w * v_col.a, 1.0f );
         gl_Position = vec4( (ndc_pos_0 + dir_x + dir_y) * zw_part.y, zw_part );
       }
     );
@@ -211,25 +209,23 @@ tex_buffer_lines_term_device( void** device_in )
 
 uint32_t
 tex_buffer_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size,
-                         float* mvp, float* viewport_size )
+                         uniform_data_t* uniform_data )
 {
   tex_buffer_lines_device_t* device = device_in;
-  device->mvp = mvp;
-  device->viewport_size = viewport_size;
+  device->uniform_data = uniform_data;
   glNamedBufferSubData( device->line_data_buffer, 0, n_elems*elem_size, data );
   return n_elems;
 }
 
-// How to ensure that we can sample from this texture buffer --> glActiveTexture/glBindTexture/Make texture resident??
 void
 tex_buffer_lines_render( const void* device_in, const int32_t count )
 {
   const tex_buffer_lines_device_t* device = device_in;
   glUseProgram( device->program_id );
 
-  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->mvp );
-  glUniform2fv( device->uniform_viewport_size_location, 1, device->viewport_size );
-  glUniform2f( device->uniform_aa_radius_location, 2.0f, 2.0f );
+  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->uniform_data->mvp );
+  glUniform2fv( device->uniform_viewport_size_location, 1, device->uniform_data->viewport );
+  glUniform2fv( device->uniform_aa_radius_location, 1, device->uniform_data->aa_radius );
 
 #if USE_BINDLESS_TEXTURES
   glUniformHandleui64ARB( device->uniform_line_data_handle_location, device->line_data_texture_handle );

@@ -3,7 +3,7 @@
 
 void* instancing_lines_init_device( void );
 uint32_t instancing_lines_update( void* device, const void* data, int32_t n_elems, int32_t elem_size, 
-                                  float* mvp, float* viewport_size );
+                                  uniform_data_t* uniform_data );
 void instancing_lines_render( const void* device, const int32_t count );
 void instancing_lines_term_device( void** );
 
@@ -26,9 +26,7 @@ typedef struct instancing_lines_device
   GLuint line_vbo;
   GLuint quad_vbo;
   GLuint quad_ebo;
-  float* mvp;
-  float* viewport_size;
-  float* aa_radius;
+  uniform_data_t* uniform_data;
 } instancing_lines_device_t;
 
 void
@@ -60,18 +58,20 @@ instancing_lines_create_shader_program( instancing_lines_device_t* device )
         float u_aspect_ratio = u_height / u_width;
 
         vec4 colors[2] = vec4[2]( line_col_0, line_col_1 );
+        colors[0].a *= min( 1.0, line_pos_width_0.w );
+        colors[1].a *= min( 1.0, line_pos_width_1.w );
         v_col = colors[ int(quad_pos.x) ];
 
         vec4 clip_pos_0 = u_mvp * vec4( line_pos_width_0.xyz, 1.0f );
-        float line_width_0 = line_pos_width_0.w + u_aa_radius.x;
+        float line_width_0 = max( 1.0, line_pos_width_0.w) + u_aa_radius.x;
         
         vec4 clip_pos_1 = u_mvp * vec4( line_pos_width_1.xyz, 1.0f );
-        float line_width_1 = line_pos_width_1.w + u_aa_radius.x;
+        float line_width_1 = max( 1.0, line_pos_width_1.w) + u_aa_radius.x;
 
         vec2 ndc_pos_0 = clip_pos_0.xy / clip_pos_0.w;
         vec2 ndc_pos_1 = clip_pos_1.xy / clip_pos_1.w;
 
-        float extension_length = (1.5f + u_aa_radius.y);
+        float extension_length = (u_aa_radius.y);
         vec2 line = ndc_pos_1 - ndc_pos_0;
         vec2 dir = normalize( vec2( line.x, line.y * u_aspect_ratio ) );
         vec2 normal_0 = vec2( line_width_0/u_width, line_width_0/u_height ) * vec2(-dir.y, dir.x );
@@ -224,11 +224,10 @@ instancing_lines_term_device( void** device_in )
 
 uint32_t
 instancing_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size,
-                         float* mvp, float* viewport_size )
+                         uniform_data_t* uniform_data )
 {
   instancing_lines_device_t* device = device_in;
-  device->mvp = mvp;
-  device->viewport_size = viewport_size;
+  device->uniform_data = uniform_data;
   glNamedBufferSubData( device->line_vbo, 0, n_elems*elem_size, data );
   return n_elems;
 }
@@ -238,9 +237,9 @@ instancing_lines_render( const void* device_in, const int32_t count )
 {
   const instancing_lines_device_t* device = device_in;
   glUseProgram( device->program_id );
-  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->mvp );
-  glUniform2fv( device->uniform_viewport_size_location, 1,  device->viewport_size );
-  glUniform2f( device->uniform_aa_radius_location, 2.0, 2.0 );
+  glUniformMatrix4fv( device->uniform_mvp_location, 1, GL_FALSE, device->uniform_data->mvp );
+  glUniform2fv( device->uniform_viewport_size_location, 1, device->uniform_data->viewport );
+  glUniform2fv( device->uniform_aa_radius_location, 1, device->uniform_data->aa_radius );
 
   glBindVertexArray( device->vao );
   glDrawElementsInstanced( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL, count>>1 );
