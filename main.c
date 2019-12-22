@@ -147,8 +147,8 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
     float line_width = 0.5;
     for( float f = -7.2; f < 2.0 ; f += 0.6 )
     {
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.0, -2.0, 0.0 ), .width = 12.0, .col = msh_vec4(0,0,0,1) };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.0,  2.0, 0.0 ), .width = 12.0, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.5, -2.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.5,  2.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
       line_width += 0.5;
     }
@@ -168,7 +168,7 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
       float x2 = cx + radius2 * sin(i * d_theta);
       float y2 = cy + radius2 * cos(i * d_theta);
 
-      *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = 3*line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
     }
