@@ -262,6 +262,12 @@ main(int32_t argc, char **argv)
   float angle = 0.0f;
 
   GLuint gl_timer_query;
+  float aliased_line_width_range[2];
+  float line_width_range[2];
+  glGetFloatv( GL_LINE_WIDTH_RANGE, line_width_range );
+  glGetFloatv( GL_ALIASED_LINE_WIDTH_RANGE, aliased_line_width_range );
+  printf("%f %f\n", line_width_range[0], line_width_range[1] );
+  printf("%f %f\n", aliased_line_width_range[0], aliased_line_width_range[1] );
   glGenQueries( 1, &gl_timer_query );
   glEnable(GL_BLEND);
   glBlendEquation(GL_FUNC_ADD);

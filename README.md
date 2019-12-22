@@ -24,6 +24,7 @@ be used to produce antialiased lines, there are a number of issues.
 
 - No guarantee that this approach will work. Implementations of OpenGL vary across systems and the glGet(GL_LINE_WIDTH_RANGE)
 On my system (NVidia GTX 1070 Max-Q) I am able to use such functionality, but it might not be true for you.
+
 - Limited range. As stated above the glGet line width will return supported range - creating lines wider or thinner than 
 such range is not supported. For example using implementations 1 vs other four will produce following images when asking for
 a wide range:
