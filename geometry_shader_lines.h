@@ -100,30 +100,30 @@ geom_shdr_lines_init_device( void )
         vec2 extension = vec2( extension_length / u_width, extension_length / u_height ) * dir;
 
         g_col = vec4( v_col[0].rgb, v_col[0].a * min( v_line_width[0], 1.0f ) );
-        g_u = 1.0;
-        g_v = 1.0;
+        g_u = line_width_a;
+        g_v = line_length * 0.5;
         g_line_width = line_width_a;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_a + normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
         
-        g_u = -1.0;
-        g_v = 1.0;
+        g_u = -line_width_a;
+        g_v = line_length * 0.5;
         g_line_width = line_width_a;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_a - normal_a - extension) * gl_in[0].gl_Position.w, gl_in[0].gl_Position.zw );
         EmitVertex();
         
         g_col = vec4( v_col[0].rgb, v_col[0].a * min( v_line_width[0], 1.0f ) );
-        g_u = 1.0;
-        g_v = -1.0;
+        g_u = line_width_b;
+        g_v = -line_length * 0.5;
         g_line_width = line_width_b;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_b + normal_b + extension) * gl_in[1].gl_Position.w, gl_in[1].gl_Position.zw );
         EmitVertex();
         
-        g_u = -1.0;
-        g_v = -1.0;
+        g_u = -line_width_b;
+        g_v = -line_length * 0.5;
         g_line_width = line_width_b;
         g_line_length = line_length * 0.5;
         gl_Position = vec4( (ndc_b - normal_b + extension) * gl_in[1].gl_Position.w, gl_in[1].gl_Position.zw );
@@ -153,8 +153,8 @@ geom_shdr_lines_init_device( void )
            Close edge : 1.0 - (2r / (w+r)) = (w+r)/(w+r) - 2r/(w+r)) = (w-r) / (w+r)
            This way the smoothing is centered around 'w'.
          */
-        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / g_line_width),  1.0, abs(g_u) );
-        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / g_line_length), 1.0, abs(g_v) );
+        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / g_line_width),  1.0, abs(g_u / g_line_width) );
+        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / g_line_length), 1.0, abs(g_v / g_line_length) );
         frag_color = g_col;
         frag_color.a *= min(av, au);
       }

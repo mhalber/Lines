@@ -97,27 +97,27 @@ cpu_lines_expand( const vertex_t* line_buf, uint32_t line_buf_len,
     // Note the additional "line_params" attribute that communicates the correct data to the glsl program
     (dst + 0)->clip_pos = clip_a0;
     (dst + 0)->col = msh_vec4( src_v0->col.x, src_v0->col.y, src_v0->col.z, alpha_a );
-    (dst + 0)->line_params = msh_vec4( -1.0, -1.0, line_width_a, 0.5*line_length );
+    (dst + 0)->line_params = msh_vec4( -line_width_a, -0.5*line_length, line_width_a, 0.5*line_length );
 
     (dst + 1)->clip_pos = clip_a1;
     (dst + 1)->col = msh_vec4( src_v0->col.x, src_v0->col.y, src_v0->col.z, alpha_a );
-    (dst + 1)->line_params = msh_vec4( 1.0, -1.0, line_width_a, 0.5*line_length );
+    (dst + 1)->line_params = msh_vec4( line_width_a, -0.5*line_length, line_width_a, 0.5*line_length );
 
     (dst + 2)->clip_pos = clip_b0;
     (dst + 2)->col = msh_vec4( src_v1->col.x, src_v1->col.x, src_v1->col.z, alpha_b );
-    (dst + 2)->line_params = msh_vec4( -1.0, 1.0, line_width_b, 0.5*line_length );
+    (dst + 2)->line_params = msh_vec4( -line_width_b, 0.5*line_length, line_width_b, 0.5*line_length );
 
     (dst + 3)->clip_pos = clip_a1;
     (dst + 3)->col = msh_vec4( src_v0->col.x, src_v0->col.y, src_v0->col.z, alpha_a );
-    (dst + 3)->line_params = msh_vec4( 1.0, -1.0, line_width_a, 0.5*line_length );
+    (dst + 3)->line_params = msh_vec4( line_width_a, -0.5*line_length, line_width_a, 0.5*line_length );
 
     (dst + 4)->clip_pos = clip_b0;
     (dst + 4)->col = msh_vec4( src_v1->col.x, src_v1->col.x, src_v1->col.z, alpha_b );
-    (dst + 4)->line_params = msh_vec4( -1.0, 1.0, line_width_b, 0.5*line_length );
+    (dst + 4)->line_params = msh_vec4( -line_width_b, 0.5*line_length, line_width_b, 0.5*line_length );
 
     (dst + 5)->clip_pos = clip_b1;
     (dst + 5)->col = msh_vec4( src_v1->col.x, src_v1->col.x, src_v1->col.z, alpha_b );
-    (dst + 5)->line_params = msh_vec4( 1.0, 1.0, line_width_b, 0.5*line_length );
+    (dst + 5)->line_params = msh_vec4( line_width_b, 0.5*line_length, line_width_b, 0.5*line_length );
 
     *quad_buf_len += 6;
     dst = quad_buf + (*quad_buf_len);
@@ -189,8 +189,9 @@ cpu_lines_init_device( void )
         float line_width = v_line_params.z;
         float line_length = v_line_params.w;
 
-        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / line_width),  1.0, abs(u) );
-        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / line_length), 1.0, abs(v) );
+        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / line_width),  1.0, abs( u / line_width ) );
+        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / line_length), 1.0, abs( v / line_length ) );
+
         frag_color = v_col;
         frag_color.a *= min( au, av );
       }

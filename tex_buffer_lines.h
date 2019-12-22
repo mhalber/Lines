@@ -118,14 +118,14 @@ tex_buffer_lines_init_device()
 
         ivec2 quad_pos = quad[ quad_id ];
 
-        v_v = 2.0 * quad_pos.x - 1.0;
-        v_u = quad_pos.y;
         v_line_width = (1.0 - quad_pos.x) * line_width_a + quad_pos.x * line_width_b;
         v_line_length = 0.5 * line_length;
+        v_v = (2.0 * quad_pos.x - 1.0) * v_line_length;
+        v_u = (quad_pos.y) * v_line_width;
 
         vec2 zw_part = (1.0 - quad_pos.x) * clip_pos_a.zw + quad_pos.x * clip_pos_b.zw;
         vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_a + quad_pos.x * normal_b);
-        vec2 dir_x = quad_pos.x * line_vector + v_v * extension;
+        vec2 dir_x = quad_pos.x * line_vector + (2.0 * quad_pos.x - 1.0) * extension;
 
         v_col = color[ quad_pos.x ];
         v_col.a = min( pos_width[quad_pos.x].w * v_col.a, 1.0f );
@@ -149,10 +149,10 @@ tex_buffer_lines_init_device()
       out vec4 frag_color;
       void main()
       {
-        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / v_line_width),  1.0, abs(v_u) );
-        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / v_line_length), 1.0, abs(v_v) );
+        float au = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[0]) / v_line_width),  1.0, abs( v_u / v_line_width ) );
+        float av = 1.0 - smoothstep( 1.0 - ((2.0*u_aa_radius[1]) / v_line_length), 1.0, abs( v_v / v_line_length ) );
         frag_color = v_col;
-        frag_color.a *= min(av, au);
+        frag_color.a *= min(au, av);
       }
     );
 

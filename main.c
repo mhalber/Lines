@@ -145,10 +145,10 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
   #else
     vertex_t *dst = line_buf;
     float line_width = 0.5;
-    for( float f = -6.6; f < 2.0 ; f += 0.4 )
+    for( float f = -7.2; f < 2.0 ; f += 0.6 )
     {
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.4, -2.0, 0.0 ), .width = 3*line_width, .col = msh_vec4(0,0,0,1) };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.4,  2.0, 0.0 ), .width = 0.2*line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.0, -2.0, 0.0 ), .width = 12.0, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.0,  2.0, 0.0 ), .width = 12.0, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
       line_width += 0.5;
     }
@@ -302,7 +302,7 @@ main(int32_t argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
-    msh_vec2_t aa_radii = msh_vec2( 2.0f, 2.0f );
+    msh_vec2_t aa_radii = msh_vec2( 2.0f, 6.0f );
     line_draw_engine_t *active_engine = engines + active_engine_idx;
     uniform_data_t uniform_data = { .mvp = &mvp.data[0], .viewport = &cam.viewport.z, .aa_radius = &aa_radii.x };
     uint32_t elem_count = update( active_engine, line_buf, line_buf_len, sizeof(vertex_t), &uniform_data );
