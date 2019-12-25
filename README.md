@@ -70,12 +70,12 @@ We can utilize the geometry shaders available in OpenGL 3.3+ to produce the desi
 ## Compilation
 The project is relatively simple to build. The only external dependecy not included in this repository is [glfw3](https://www.glfw.org/).
 
-if you have a command line compiler like clang of gcc, and glfw3 is in path, you could simply something similar to this to your terminal (+- the OpenGL libs, depending on your system)
+If you have a command line compiler like clang of gcc, and glfw3 is in path, you could simply something similar to this to your terminal (+- the OpenGL libs, depending on your system)
 
 ```
 gcc -std=c11 -I. extern/glad.c main.c -o lines -lglfw3 -lopengl32
 ```
 
-## References
+<!-- ## References -->
 
 
