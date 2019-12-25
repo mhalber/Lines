@@ -5,12 +5,12 @@
 #define MSH_CAMERA_IMPLEMENTATION
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#include "glad.h"
+#include "extern/glad.h"
 
-#include "msh/msh_std.h"
-#include "msh/msh_argparse.h"
-#include "msh/msh_vec_math.h"
-#include "msh/msh_camera.h"
+#include "extern/msh_std.h"
+#include "extern/msh_argparse.h"
+#include "extern/msh_vec_math.h"
+#include "extern/msh_camera.h"
 
 #include "gl_utils.h"
 
@@ -144,14 +144,15 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
   }
   #else
     vertex_t *dst = line_buf;
-    float line_width = 0.5;
-    for( float f = -7.2; f < 2.0 ; f += 0.6 )
+    float line_width = 6.0;
+    for( float f = -2.0; f < 2.2 ; f += 0.5 )
     {
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.5, -2.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.5,  2.0, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.2, -2.0, 0.0 ), .width = line_width, .col = msh_vec4( 0, 0, 0, 1 ) };
+      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.2,  2.0, 0.0 ), .width = line_width, .col = msh_vec4( 0, 0, 0, 1 ) };
       *line_buf_len += 2;
-      line_width += 0.5;
+      // line_width += 1.0;
     }
+/*
     int32_t circle_res = 32;
     float d_theta = MSH_TWO_PI / circle_res;
     float radius1 = 0.1f;
@@ -172,6 +173,7 @@ void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t lin
       *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
       *line_buf_len += 2;
     }
+*/
   #endif
 }
 
@@ -262,14 +264,6 @@ main(int32_t argc, char **argv)
   float angle = 0.0f;
 
   GLuint gl_timer_query;
-  float aliased_line_width_range[2];
-  float line_width_range[2];
-  glGetFloatv( GL_LINE_WIDTH_RANGE, line_width_range );
-  glGetFloatv( GL_ALIASED_LINE_WIDTH_RANGE, aliased_line_width_range );
-  printf("%f %f\n", line_width_range[0], line_width_range[1] );
-  printf("%f %f\n", aliased_line_width_range[0], aliased_line_width_range[1] );
-  const char* gl_vendor_string = glGetString(GL_VERSION);
-  printf("%s\n", gl_vendor_string );
   glGenQueries( 1, &gl_timer_query );
   glEnable(GL_BLEND);
   glBlendEquation(GL_FUNC_ADD);
@@ -310,7 +304,7 @@ main(int32_t argc, char **argv)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
-    msh_vec2_t aa_radii = msh_vec2( 2.0f, 6.0f );
+    msh_vec2_t aa_radii = msh_vec2( 2.0f, 2.0f );
     line_draw_engine_t *active_engine = engines + active_engine_idx;
     uniform_data_t uniform_data = { .mvp = &mvp.data[0], .viewport = &cam.viewport.z, .aa_radius = &aa_radii.x };
     uint32_t elem_count = update( active_engine, line_buf, line_buf_len, sizeof(vertex_t), &uniform_data );

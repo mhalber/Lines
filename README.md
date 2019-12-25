@@ -1,4 +1,3 @@
-# WORK IN PROGRESS
 # Lines
 
 <p align="center"> 
@@ -21,32 +20,38 @@ For simplicity, the implementation assume vertex buffer where each pair of point
 
 ## Why?
 
-The reason for exploring different implementations of wide line rendering is steming from the fact that using the build-in
-OpenGL functionality for this task is very limited, if working at all. 
-While combining `glLineWidth(width_value)` and `glEnable(GL_LINE_SMOOTH)` **"can"** be used to produce antialiased lines, there are a number of issues:
+The reason for exploring different implementations of wide line rendering is steming from the fact that using the build-in OpenGL functionality for this task is very limited, if working at all. While combining `glLineWidth(width_values)` and `glEnable(GL_LINE_SMOOTH)` **"can"** be used to produce antialiased lines, there are a number of issues:
 
-- No guarantee that this approach will work. Implementations of OpenGL vary across systems - the `glGet( GL_LINE_WIDTH_RANGE, range)` can simply tell you that your implementation only supports a range (1.0,1.0], leading to effectively no control over 
-the line width. On my system at the time of writing (NVidia GTX 1070 Max-Q, OpenGL 4.5, driver 441.08) the supported `GL_LINE_WIDTH_RANGE` is [1.0, 10.0]. As such I am able to produce image below, but your milage may vary:
+- No guarantee that this approach will work. Implementations of OpenGL vary across systems - the `glGet( GL_LINE_WIDTH_RANGE, range)` can simply tell you that your implementation only supports a range (1.0,1.0], leading to effectively no control over the line width. On my system at the time of writing (NVidia GTX 1070 Max-Q, OpenGL 4.5, driver 441.08) the supported `GL_LINE_WIDTH_RANGE` is [1.0, 10.0]. As such I am able to produce image below, but your milage may vary:
 
-- Limited range. As stated above the `glGet( GL_LINE_WIDTH_RANGE, ...)` line width will return supported range - creating lines with widths outside this range will fail. For example, using implementations 1 vs other four will produce following images when
-asking to draw 3 lines segments with widths of 10, 15, 20 pixels:
+- Limited range. As stated above the `glGet( GL_LINE_WIDTH_RANGE, ...)` line width will return supported range - creating lines with widths outside this range will fail. For example, using implementations 1 (using `GL_LINES` + `glLineWidth`) vs other four will produce following images when asking to draw 15 lines segments with widths between 1 and 15 pixels:
 
-% figure
+<p align="center"> 
+<img src="screenshots/line_width_range.png">
+</p>
 
-- No control over AA. `glEnable(GL_LINE_SMOOTH)` enables anti-aliasing, however we have no control over this behavior. In contrast
-the custom implementation in this repository (2-5) allow user to specify the width of the smoothed region:
+- No control over AA. `glEnable(GL_LINE_SMOOTH)` enables anti-aliasing, however we have no control over this behavior. The custom implementations (2-5) allow user to specify the width of the smoothed region. In the figure below the smoothing radius is varied between 0 and 5 pixels wide:
 
-% figure
+<p align="center"> 
+<img src="screenshots/line_filtering.png">
+</p>
 
-- No control over line width within a drawcall. Due to the nature of `glLineWidth(width_value)` the line width
-need to constant within a drawcall. This means multiple drawcalls needs to be issue to render lines with varying widths.
-In contrast, the custom implementation expose line width as a per-vertex attribute, allowing to render variable-width
+- No control over line width within a drawcall. Due to the nature of `glLineWidth(width_value)` the line width need to constant within a drawcall. This means multiple drawcalls needs to be issue to render lines with varying widths. In contrast, the custom implementation expose line width as a per-vertex attribute, allowing to render variable-width
 lines with a single draw call.
 
 ## Methods
 
-Here we briefly discuss how each method is implemented. Main idea is to have a parametrized quad and smooth the edge regions.
+All custom line-drawing methods follow the same baseline paradigm - drawing a quad that is oriented as the line segment, and aligned with the viewport. The gross simplification of the general algorithm has the following form:
 
+1. Transform line segment end points `p` and `q` to normalized device space. At this point we work in 2D space, regardless of whether original line was specified as 2D or 3D line. 
+2. Calculate direction `d`, corrected for viewport aspect ratio.
+3. Calculate unit normal vector `n = {-d.y, d.x}`
+4. Modulate `n` by approperiate line-widths to get vectors `n_a` and `n_b` 
+5. Create quad points `a = p + n_a`, `b = p - n_a`, `c = q + n_b`, `d = q - n_b`
+6. Move points `a`, `b`, `c`, `d` back to clip space and pass them down the rasterization pipeline
+
+<!-- 
+Below we discuss different variants of the method 
 ### CPU lines
 If everything else fails, we can always just take the input buffer and use it to calculate new vertex locations.
 
@@ -55,16 +60,22 @@ We can utilize the geometry shaders available in OpenGL 3.3+ to produce the desi
 
 ### Instancing lines
 
-% Add references
 
 ### Texture Buffer lines
 
-% Add references to Chrisoph Kubish talk on the OpenGL blueprints.
+% Add references to Chrisoph Kubish talk on the OpenGL blueprints. -->
 
 
 
+## Compilation
+The project is relatively simple to build. The only external dependecy not included in this repository is [glfw3](https://www.glfw.org/).
 
-## Method Comparison
+if you have a command line compiler like clang of gcc, and glfw3 is in path, you could simply something similar to this to your terminal (+- the OpenGL libs, depending on your system)
 
+```
+gcc -std=c11 -I. extern/glad.c main.c -o lines -lglfw3 -lopengl32
+```
+
+## References
 
 
