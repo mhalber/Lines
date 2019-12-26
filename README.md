@@ -41,14 +41,33 @@ lines with a single draw call.
 
 ## Methods
 
-All custom line-drawing methods follow the same baseline paradigm - drawing a quad that is oriented as the line segment, and aligned with the viewport. The gross simplification of the general algorithm has the following form:
+All custom line-drawing methods follow the same baseline paradigm - drawing a quad that is oriented as the line segment, and aligned with the viewport. The gross simplification of the general algorithm is:
 
 1. Transform line segment end points `p` and `q` to normalized device space. At this point we work in 2D space, regardless of whether original line was specified as 2D or 3D line. 
 2. Calculate direction `d`, corrected for viewport aspect ratio.
 3. Calculate unit normal vector `n = {-d.y, d.x}`
-4. Modulate `n` by approperiate line-widths to get vectors `n_a` and `n_b` 
+4. Modulate `n` by approperiate line widths to get vectors `n_a` and `n_b` 
 5. Create quad points `a = p + n_a`, `b = p - n_a`, `c = q + n_b`, `d = q - n_b`
 6. Move points `a`, `b`, `c`, `d` back to clip space and pass them down the rasterization pipeline
+
+The smoothing is done by adding the requested smoothing radius to the user-specified line width, and modifying the alpha value based on the distance from the edge, giving the quad a total width of `w+2r`, as seen below:
+
+<p align="center"> 
+<img src="screenshots/quad_diagram.png">
+</p>
+
+The circle area along the edge at length `w` from the actual line is the area of smoothing, based on ideas from
+[Fast Prefiltered Lines](https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-22-fast-prefiltered-lines). Essentially, the alpha value will be modulated between 0 and 1 in the region
+between `h-r` and `h+r`, where `h=0.5w`:
+
+<p align="center"> 
+<img src="screenshots/smoothstep.png">
+</p>
+
+The falloff is controlled using the GLSL build-in `smoothstep` function. 
+
+Different method vary in terms of how a line segment between `p` and `q` is transformed
+into such grid. <!-- Read on for a brief differences in implementations: -->
 
 <!-- 
 Below we discuss different variants of the method 
@@ -68,13 +87,15 @@ We can utilize the geometry shaders available in OpenGL 3.3+ to produce the desi
 
 
 ## Compilation
-The project is relatively simple to build. The only external dependecy not included in this repository is [glfw3](https://www.glfw.org/).
+The project is relatively simple to build. The external dependecy not included in this repository is [glfw3](https://www.glfw.org/). You also need a OpenGL 4.5 to run this code, due to usage of OpenGL DSA APIs.
 
-If you have a command line compiler like clang of gcc, and glfw3 is in path, you could simply something similar to this to your terminal (+- the OpenGL libs, depending on your system)
+If you have a command line compiler like clang of gcc, and glfw3 is in path, you could simply something similar to this to your terminal (± the OpenGL libs, depending on your system)
 
 ```
 gcc -std=c11 -I. extern/glad.c main.c -o lines -lglfw3 -lopengl32
 ```
+
+The source tree also includes a CMakeLists.txt to generate build files, if that's your jam. I only tested it under Msys2, please let me know if you have troubles compiling.
 
 <!-- ## References -->
 
