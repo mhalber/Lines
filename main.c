@@ -85,96 +85,36 @@ void terminate( line_draw_engine_t* engine )
 
 void generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf_cap )
 {
-  #if 0
-  vertex_t *dst1 = line_buf;
-  vertex_t *dst2 = line_buf + 1;
-
-  int32_t grid_w = 100;
-  int32_t grid_h = 50;
-  int32_t grid_d = 3;
-  float grid_step = 0.1f;
-
-  int32_t circle_res = 6;
-  float d_theta = MSH_TWO_PI / circle_res;
-  float radius = 0.04f;
-
-  float r = 0.0;
-  for (int32_t iz = -grid_d / 2; iz <= grid_d / 2; iz++)
+  vertex_t *dst = line_buf;
+  float line_width = 0.5;
+  for( float f = -7.2; f < 2.2 ; f += 0.6 )
   {
-    float z = iz * grid_step;
-    r += (1.0 / grid_d);
-    float g = 0.0;
-    for (int32_t iy = -grid_h / 2; iy <= grid_h / 2; iy++)
-    {
-      float cy = iy * grid_step;
-      g += (1.0 / grid_h);
-      float b = 0.0f;
-      for (int32_t ix = -grid_w / 2; ix <= grid_w / 2; ix++)
-      {
-        float cx = ix * grid_step;
-        b += (1.0 / grid_w);
-        msh_vec3_t prev_pos = msh_vec3(cx + radius * sin(0.0f), cy + radius * cos(0.0f), z );
-        float x = 0.0f;
-        float y = 0.0f;
-        // msh_vec3_t col = msh_vec3( r, g, b );
-        for (int i = 1; i <= circle_res; ++i)
-        {
-          x = cx + radius * sin(i * d_theta);
-          y = cy + radius * cos(i * d_theta);
-
-          dst1->pos = prev_pos;
-          dst1->width = 1.0f;
-          dst2->pos = msh_vec3(x, y, z);
-          dst2->width = 1.0f;
-          prev_pos = dst2->pos;
-          dst1->col = msh_vec4(0, 0, 0, 1);
-          dst2->col = msh_vec4(0, 0, 0, 1);
-          dst1 += 2;
-          dst2 += 2;
-          *line_buf_len += 2;
-          
-          if (*line_buf_len >= line_buf_cap)
-          {
-            printf("[Spiral] Out of space!\n");
-            break;
-          }
-        }
-      }
-    }
+    *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.4, -2.0, 0.0 ), .width = line_width, .col = msh_vec4( 0, 0, 0, 1 ) };
+    *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.4,  2.0, 0.0 ), .width = line_width, .col = msh_vec4( 0, 0, 0, 1 ) };
+    *line_buf_len += 2;
+    line_width += 1.0;
   }
-  #else
-    vertex_t *dst = line_buf;
-    float line_width = 6.0;
-    for( float f = -2.0; f < 2.2 ; f += 0.5 )
-    {
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f - 0.2, -2.0, 0.0 ), .width = line_width, .col = msh_vec4( 0, 0, 0, 1 ) };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  f + 0.2,  2.0, 0.0 ), .width = line_width, .col = msh_vec4( 0, 0, 0, 1 ) };
-      *line_buf_len += 2;
-      // line_width += 1.0;
-    }
-/*
-    int32_t circle_res = 32;
-    float d_theta = MSH_TWO_PI / circle_res;
-    float radius1 = 0.1f;
-    float radius2 = 2.0f;
-    float cx = 4.5;
-    float cy = 0.0;
-    line_width = 1.0;
 
-    for (int i = 0; i < circle_res; ++i)
-    {
-      float x1 = cx + radius1 * sin(i * d_theta);
-      float y1 = cy + radius1 * cos(i * d_theta);
+  int32_t circle_res = 32;
+  float d_theta = MSH_TWO_PI / circle_res;
+  float radius1 = 0.4f;
+  float radius2 = 2.0f;
+  float cx = 4.5;
+  float cy = 0.0;
+  line_width = 1.0;
 
-      float x2 = cx + radius2 * sin(i * d_theta);
-      float y2 = cy + radius2 * cos(i * d_theta);
+  for (int i = 0; i < circle_res; ++i)
+  {
+    float x1 = cx + radius1 * sin(i * d_theta);
+    float y1 = cy + radius1 * cos(i * d_theta);
 
-      *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
-      *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
-      *line_buf_len += 2;
-    }
-*/
-  #endif
+    float x2 = cx + radius2 * sin(i * d_theta);
+    float y2 = cy + radius2 * cos(i * d_theta);
+
+    *dst++ = (vertex_t){ .pos = msh_vec3(  x1, y1, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+    *dst++ = (vertex_t){ .pos = msh_vec3(  x2, y2, 0.0 ), .width = line_width, .col = msh_vec4(0,0,0,1) };
+    *line_buf_len += 2;
+  }
 }
 
 int32_t active_engine_idx = 1;
@@ -236,6 +176,9 @@ main(int32_t argc, char **argv)
     glEnable( GL_DEBUG_OUTPUT );
     glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
     glDebugMessageCallback( gl_utils_debug_msg_call_back, NULL );
+    glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_FALSE );
+    // Turn errors on.
+    glDebugMessageControl( GL_DONT_CARE, GL_DEBUG_TYPE_ERROR, GL_DONT_CARE, 0, NULL, GL_TRUE ); 
   }
 
   uint32_t line_buf_cap = MAX_VERTS / 3;

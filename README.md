@@ -108,8 +108,11 @@ The source tree also includes a CMakeLists.txt to generate build files, if that'
 
 ## References
 [Im3D; John Chapman '18](https://github.com/john-chapman/im3d)
+
 [OpenGL Blueprint Rendering; Kubisch '16](http://on-demand.gputechconf.com/gtc/2016/presentation/s6143-christoph-kubisch-blueprint-rendering.pdf)
+
 [Fast Prefiltered Lines; Chan & Durand '05](https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-22-fast-prefiltered-lines)
+
 [Shader-Based Antialiased, Dashed, Stroked Polylines, Rougier '13](http://jcgt.org/published/0002/02/08/)
 
 
