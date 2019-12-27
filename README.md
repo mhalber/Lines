@@ -89,7 +89,7 @@ In this implementation a simple base-quad is drawn for each line segment, and th
 <img src="screenshots/instancing_quad.png">
 </p>
 
-Three buffers are bound in total: one describing the actual quad (array + element buffer), and a buffer describing line geometry. In vertex shader, we get the attributes of endpoints and modify the quad positions accordingly.
+Three buffers are bound in total: one describing the actual quad (array + element buffer), and a buffer describing line geometry. In vertex shader, we get the attributes of endpoints and modify the quad positions accordingly. The idea behind this implementation is explained in [Instanced Line Rendering](https://wwwtyro.net/2019/11/18/instanced-lines.html)
 
 ### Texture Buffer lines
 This implementation renders the triangles out of thin air using `gl_VertexID`. We ask to render 2 triangles for each line segment and in the Vertex Buffer, based on 'gl_VertexID' we can sample appropriate positions from a texture buffer which stores our line locations. This implementation is loosely based on ideas presented in [OpenGL Blueprint Rendering](http://on-demand.gputechconf.com/gtc/2016/presentation/s6143-christoph-kubisch-blueprint-rendering.pdf)
@@ -115,4 +115,4 @@ The source tree also includes a CMakeLists.txt to generate build files, if that'
 
 [Shader-Based Antialiased, Dashed, Stroked Polylines, Rougier '13](http://jcgt.org/published/0002/02/08/)
 
-
+[Instanced Line Rendering; Tyrell 19](https://wwwtyro.net/2019/11/18/instanced-lines.html)
