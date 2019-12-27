@@ -204,7 +204,6 @@ main(int32_t argc, char **argv)
   msh_mat4_t vp = msh_mat4_mul(cam.proj, cam.view);
   double timers[3] = { 0.0, 0.0, 0.0 };
   uint64_t frame_idx = 0;
-  float angle = 0.0f;
 
   GLuint gl_timer_query;
   glGenQueries( 1, &gl_timer_query );
@@ -225,16 +224,15 @@ main(int32_t argc, char **argv)
       int32_t fb_w, fb_h;
       glfwGetFramebufferSize( window, &fb_w, &fb_h );
     }
+
+    msh_mat4_t model = msh_mat4_identity();
+    msh_mat4_t mvp = msh_mat4_mul(vp, model);
+
     uint64_t t1, t2;
-    
+
     t1 = msh_time_now();
     line_buf_len = 0;
     generate_line_data(line_buf, &line_buf_len, line_buf_cap);
-    angle += 0.1f;
-    if( angle >= 360.0f ) { angle = 0.0f; }
-    msh_mat4_t model = msh_mat4_identity();
-    //msh_post_rotate( msh_mat4_identity(), msh_deg2rad(angle), msh_vec3_posy() );
-    msh_mat4_t mvp = msh_mat4_mul(vp, model);
     t2 = msh_time_now();
 
     double diff1 = msh_time_diff_ms(t2, t1);
@@ -243,7 +241,7 @@ main(int32_t argc, char **argv)
     glBeginQuery( GL_TIME_ELAPSED, gl_timer_query );
     t1 = msh_time_now();
 
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, window_width, window_height);
 
@@ -281,8 +279,11 @@ main(int32_t argc, char **argv)
     glfwPollEvents();
   }
 
-  // terminate( engines + 0 );
-  // terminate( engines + 2 );
+  terminate( engines + 0 );
+  terminate( engines + 1 );
+  terminate( engines + 2 );
+  terminate( engines + 3 );
+  terminate( engines + 4 );
 
   glfwTerminate();
   return EXIT_SUCCESS;
