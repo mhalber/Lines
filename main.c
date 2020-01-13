@@ -126,6 +126,7 @@ const char* method_names[5] =
   "Tex. Buffer Lines",
   "Instancing Lines"
 };
+
 void key_callback( GLFWwindow* window, int key, int scancode, int action, int mods )
 {
   if( key == GLFW_KEY_1 && action == GLFW_PRESS ) { active_engine_idx = 0; }
