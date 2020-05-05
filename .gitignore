@@ -1,5 +1,9 @@
 .vscode/**
 build/**
+bin/**
 *.exe
 *.kra
 *~
+*.4coder
+*.bat
+*.sh
