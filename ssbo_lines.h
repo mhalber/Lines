@@ -1,50 +1,52 @@
-#ifndef TEX_BUFFER_LINES_H
-#define TEX_BUFFER_LINES_H
+#ifndef SSBO_LINES_H
+#define SSBO_LINES_H
 
-void* tex_buffer_lines_init_device(void);
-uint32_t tex_buffer_lines_update(void* device, const void* data, int32_t n_elems, int32_t elem_size,
-                                 uniform_data_t* uniform_data);
-void tex_buffer_lines_render(const void* device, const int32_t count);
-void tex_buffer_lines_term_device(void**);
+void* ssbo_lines_init_device(void);
+uint32_t ssbo_lines_update(void* device, const void* data, int32_t n_elems, int32_t elem_size,
+                           uniform_data_t* uniform_data);
+void ssbo_lines_render(const void* device, const int32_t count);
+void ssbo_lines_term_device(void**);
 
-#endif /*TEX_BUFFER_LINES*/
+#endif /*SSBO_LINES*/
 
-#ifdef TEX_BUFFER_LINES_IMPLEMENTATION
+#ifdef SSBO_LINES_IMPLEMENTATION
 
-typedef struct tex_buffer_lines_device
+typedef struct ssbo_lines_device
 {
     GLuint program_id;
     GLuint vao;
-    GLuint line_data_buffer;
-    GLuint line_data_texture_id;
+    GLuint line_data_ssbo;
     
-    struct tex_buffer_lines_uniform_locations
+    struct ssbo_lines_uniform_locations
     {
         GLuint mvp;
         GLuint viewport_size;
         GLuint aa_radius;
-        
-        GLuint line_data_sampler;
+        GLuint ssbo_data;
     } uniforms;
     
     uniform_data_t* uniform_data;
-} tex_buffer_lines_device_t;
+} ssbo_lines_device_t;
 
 void*
-tex_buffer_lines_init_device(void)
+ssbo_lines_init_device(void)
 {
-    tex_buffer_lines_device_t* device = malloc( sizeof(tex_buffer_lines_device_t) );
-    memset( device, 0, sizeof(tex_buffer_lines_device_t) );
+    ssbo_lines_device_t* device = malloc( sizeof(ssbo_lines_device_t) );
+    memset( device, 0, sizeof(ssbo_lines_device_t) );
     
     const char* vs_src =
         GL_UTILS_SHDR_VERSION
         GL_UTILS_SHDR_SOURCE(
+                             struct Vertex {
+                                 vec4 pos_width;
+                                 vec4 color;
+                             };
                              layout(location = 0) uniform mat4 u_mvp;\n
                              layout(location = 1) uniform vec2 u_viewport_size;\n
                              layout(location = 2) uniform vec2 u_aa_radius;\n
-                             layout(location = 3) uniform samplerBuffer u_line_data_sampler;\n
-                             
-                             // TODO(maciej): communicate vertex layout to vertex shader somehow.
+                             layout(std430, binding=0) buffer VertexData {
+                                 Vertex vertices[];
+                             };
                              
                              out vec4 v_col;\n
                              out noperspective float v_u;
@@ -66,17 +68,12 @@ tex_buffer_lines_init_device(void)
                                  ivec2 quad[6] = ivec2[6](ivec2(0, -1), ivec2(0, 1), ivec2(1,  1),
                                                           ivec2(0, -1), ivec2(1, 1), ivec2(1, -1) );
                                  
-                                 // Sample data for this line segment
-                                 vec4 pos_width[2];
-                                 pos_width[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 );
-                                 pos_width[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 );
+                                 Vertex line_vertices[2];
+                                 line_vertices[0] = vertices[line_id_0];
+                                 line_vertices[1] = vertices[line_id_1];
                                  
-                                 vec4 color[2];
-                                 color[0] = texelFetch( u_line_data_sampler, line_id_0 * 2 + 1 );
-                                 color[1] = texelFetch( u_line_data_sampler, line_id_1 * 2 + 1 );
-                                 
-                                 vec4 clip_pos_a = u_mvp * vec4( pos_width[0].xyz, 1.0 );
-                                 vec4 clip_pos_b = u_mvp * vec4( pos_width[1].xyz, 1.0 );
+                                 vec4 clip_pos_a = u_mvp * vec4( line_vertices[0].pos_width.xyz, 1.0 );
+                                 vec4 clip_pos_b = u_mvp * vec4( line_vertices[1].pos_width.xyz, 1.0 );
                                  
                                  vec2 ndc_pos_a = clip_pos_a.xy / clip_pos_a.w;
                                  vec2 ndc_pos_b = clip_pos_b.xy / clip_pos_b.w;
@@ -87,8 +84,8 @@ tex_buffer_lines_init_device(void)
                                  
                                  float extension_length = (u_aa_radius.y);
                                  float line_length      = length( viewport_line_vector ) + 2.0 * extension_length;
-                                 float line_width_a     = max( pos_width[0].w, 1.0 ) + u_aa_radius.x;
-                                 float line_width_b     = max( pos_width[1].w, 1.0 ) + u_aa_radius.x;
+                                 float line_width_a     = max( line_vertices[0].pos_width.w, 1.0 ) + u_aa_radius.x;
+                                 float line_width_b     = max( line_vertices[1].pos_width.w, 1.0 ) + u_aa_radius.x;
                                  
                                  vec2 normal    = vec2( -dir.y, dir.x );
                                  vec2 normal_a  = vec2( line_width_a / u_width, line_width_a / u_height ) * normal;
@@ -106,8 +103,8 @@ tex_buffer_lines_init_device(void)
                                  vec2 dir_y = quad_pos.y * ((1.0 - quad_pos.x) * normal_a + quad_pos.x * normal_b);
                                  vec2 dir_x = quad_pos.x * line_vector + (2.0 * quad_pos.x - 1.0) * extension;
                                  
-                                 v_col = color[ quad_pos.x ];
-                                 v_col.a = min( pos_width[quad_pos.x].w * v_col.a, 1.0f );
+                                 v_col = line_vertices[quad_pos.x].color;
+                                 v_col.a = min( line_vertices[quad_pos.x].pos_width.w * v_col.a, 1.0f );
                                  
                                  gl_Position = vec4( (ndc_pos_a + dir_x + dir_y) * zw_part.y, zw_part );
                              }
@@ -116,7 +113,6 @@ tex_buffer_lines_init_device(void)
     const char* fs_src =
         GL_UTILS_SHDR_VERSION
         GL_UTILS_SHDR_SOURCE(
-                             
                              layout(location = 2) uniform vec2 u_aa_radius;
                              
                              in vec4 v_col;
@@ -156,63 +152,60 @@ tex_buffer_lines_init_device(void)
     glDetachShader( device->program_id, fragment_shader );
     glDeleteShader( vertex_shader );
     glDeleteShader( fragment_shader );
-    
+#if 1
     device->uniforms.mvp           = glGetUniformLocation( device->program_id, "u_mvp" );
     device->uniforms.viewport_size = glGetUniformLocation( device->program_id, "u_viewport_size" );
     device->uniforms.aa_radius     = glGetUniformLocation( device->program_id, "u_aa_radius" );
     
-    device->uniforms.line_data_sampler = glGetUniformLocation( device->program_id, "u_line_data_sampler");
-    
     glCreateVertexArrays( 1, &device->vao );
     
-    glCreateBuffers( 1, &device->line_data_buffer );
-    glNamedBufferStorage( device->line_data_buffer, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT );
-    
-    glCreateTextures( GL_TEXTURE_BUFFER, 1, &device->line_data_texture_id );
-    glTextureBuffer( device->line_data_texture_id, GL_RGBA32F, device->line_data_buffer );
-    
+    glCreateBuffers( 1, &device->line_data_ssbo );
+    glNamedBufferStorage( device->line_data_ssbo, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, device->line_data_ssbo );
+#endif
     return device;
 }
 
 void
-tex_buffer_lines_term_device( void** device_in )
+ssbo_lines_term_device( void** device_in )
 {
-    tex_buffer_lines_device_t* device = *device_in;
+#if 1
+    ssbo_lines_device_t* device = *device_in;
     glDeleteProgram( device->program_id );
-    glDeleteBuffers( 1, &device->line_data_buffer );
+    glDeleteBuffers( 1, &device->line_data_ssbo );
     glDeleteVertexArrays( 1, &device->vao );
-    glDeleteTextures( 1, &device->line_data_texture_id );
+#endif
 }
 
 uint32_t
-tex_buffer_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size,
-                        uniform_data_t* uniform_data )
+ssbo_lines_update( void* device_in, const void* data, int32_t n_elems, int32_t elem_size,
+                  uniform_data_t* uniform_data )
 {
-    tex_buffer_lines_device_t* device = device_in;
+#if 1
+    ssbo_lines_device_t* device = device_in;
     device->uniform_data = uniform_data;
-    glNamedBufferSubData( device->line_data_buffer, 0, n_elems*elem_size, data );
+    glNamedBufferSubData( device->line_data_ssbo, 0, n_elems*elem_size, data );
+#endif
     return n_elems;
 }
 
 void
-tex_buffer_lines_render( const void* device_in, const int32_t count )
+ssbo_lines_render( const void* device_in, const int32_t count )
 {
-    const tex_buffer_lines_device_t* device = device_in;
+#if 1
+    const ssbo_lines_device_t* device = device_in;
     glUseProgram( device->program_id );
     
     glUniformMatrix4fv( device->uniforms.mvp, 1, GL_FALSE, device->uniform_data->mvp );
     glUniform2fv( device->uniforms.viewport_size, 1, device->uniform_data->viewport );
     glUniform2fv( device->uniforms.aa_radius, 1, device->uniform_data->aa_radius );
     
-    glActiveTexture( GL_TEXTURE0 );
-    glBindTexture( GL_TEXTURE_BUFFER, device->line_data_texture_id );
-    glUniform1i( device->uniforms.line_data_sampler, 0 );
-    
     glBindVertexArray( device->vao );
     glDrawArrays( GL_TRIANGLES, 0, 3 * count );
     
     glBindVertexArray( 0 );
     glUseProgram( 0 );
+#endif
 }
 
-#endif /*TEX_BUFFER_LINES_IMPLEMENTATION*/
+#endif

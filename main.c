@@ -38,13 +38,15 @@ typedef struct uniform_data
 #define GL_LINES_IMPLEMENTATION
 #define CPU_LINES_IMPLEMENTATION
 #define GEOMETRY_SHADER_LINES_IMPLEMENTATION
-#define TEX_BUFFER_LINES_IMPLEMENTATION
 #define INSTANCING_LINES_IMPLEMENTATION
+#define TEX_BUFFER_LINES_IMPLEMENTATION
+#define SSBO_LINES_IMPLEMENTATION
 #include "gl_lines.h"
 #include "cpu_lines.h"
 #include "geometry_shader_lines.h"
-#include "tex_buffer_lines.h"
 #include "instancing_lines.h"
+#include "tex_buffer_lines.h"
+#include "ssbo_lines.h"
 
 typedef struct line_draw_engine
 {
@@ -124,13 +126,14 @@ generate_line_data(vertex_t *line_buf, uint32_t *line_buf_len, uint32_t line_buf
 }
 
 int32_t active_engine_idx = 1;
-const char* method_names[5] =
+const char* method_names[6] =
 {
     "GL Lines",
     "CPU Lines",
     "Geometry Shader Lines",
+    "Instancing Lines",
     "Tex. Buffer Lines",
-    "Instancing Lines"
+    "SSBO Lines"
 };
 
 void key_callback( GLFWwindow* window, int key, int scancode, int action, int mods )
@@ -140,6 +143,7 @@ void key_callback( GLFWwindow* window, int key, int scancode, int action, int mo
     if( key == GLFW_KEY_3 && action == GLFW_PRESS ) { active_engine_idx = 2; }
     if( key == GLFW_KEY_4 && action == GLFW_PRESS ) { active_engine_idx = 3; }
     if( key == GLFW_KEY_5 && action == GLFW_PRESS ) { active_engine_idx = 4; }
+    if( key == GLFW_KEY_6 && action == GLFW_PRESS ) { active_engine_idx = 5; }
 }
 
 int32_t
@@ -176,6 +180,10 @@ main(int32_t argc, char **argv)
         return EXIT_FAILURE;
     }
     
+    printf("%s\n", glGetString(GL_RENDERER));
+    printf("%s\n", glGetString(GL_VENDOR));
+    printf("%s\n", glGetString(GL_VERSION));
+    
     GLint flags;
     glGetIntegerv( GL_CONTEXT_FLAGS, &flags );
     if( flags & GL_CONTEXT_FLAG_DEBUG_BIT )
@@ -183,8 +191,9 @@ main(int32_t argc, char **argv)
         glEnable( GL_DEBUG_OUTPUT );
         glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
         glDebugMessageCallback( gl_utils_debug_msg_call_back, NULL );
+        // Turn all diagnostics off
         glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_FALSE );
-        // Turn errors on.
+        // Turn errors on
         glDebugMessageControl( GL_DONT_CARE, GL_DEBUG_TYPE_ERROR, GL_DONT_CARE, 0, NULL, GL_TRUE );
     }
     
@@ -192,22 +201,27 @@ main(int32_t argc, char **argv)
     uint32_t line_buf_len;
     vertex_t *line_buf = malloc(line_buf_cap * sizeof(vertex_t));
     
-    line_draw_engine_t engines[5] = {0};
+    line_draw_engine_t engines[6] = {0};
     setup( engines + 0, &gl_lines_init_device, &gl_lines_update, &gl_lines_render, &gl_lines_term_device );
     setup( engines + 1, &cpu_lines_init_device, &cpu_lines_update, &cpu_lines_render, &cpu_lines_term_device );
     setup( engines + 2, &geom_shdr_lines_init_device, &geom_shdr_lines_update, &geom_shdr_lines_render, &geom_shdr_lines_term_device );
-    setup( engines + 3, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render, &tex_buffer_lines_term_device );
-    setup( engines + 4, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render, &instancing_lines_term_device);
+    setup( engines + 3, &instancing_lines_init_device, &instancing_lines_update, &instancing_lines_render, &instancing_lines_term_device);
+    setup( engines + 4, &tex_buffer_lines_init_device, &tex_buffer_lines_update, &tex_buffer_lines_render, &tex_buffer_lines_term_device );
+    setup( engines + 5, &ssbo_lines_init_device, &ssbo_lines_update, &ssbo_lines_render, &ssbo_lines_term_device);
     
     msh_camera_t cam = {0};
-    msh_camera_init(&cam, &(msh_camera_desc_t){.eye = msh_vec3( 0.0f, 0.0f, 6.0f ),
+    msh_camera_init(&cam,
+                    &(msh_camera_desc_t)
+                    {
+                        .eye = msh_vec3( 0.0f, 0.0f, 6.0f ),
                         .center = msh_vec3_zeros(),
                         .up = msh_vec3_posy(),
                         .viewport = msh_vec4(0.0f, 0.0f, window_width, window_height),
                         .fovy = msh_rad2deg(60),
                         .znear = 0.01f,
                         .zfar = 100.0f,
-                        .use_ortho = true });
+                        .use_ortho = true
+                    });
     msh_mat4_t vp = msh_mat4_mul(cam.proj, cam.view);
     double timers[3] = { 0.0, 0.0, 0.0 };
     uint64_t frame_idx = 0;
